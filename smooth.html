@@ -1,0 +1,29 @@
+<?doctype html?>
+<html>
+	<head>
+		<title>Smoothing the Free-Hand drawing</title>
+		<script src="smooth.js"></script>
+<style>
+#drawing {
+	height: 80vh;
+	width: 100vw;
+	background-color: blanchedalmond;
+}
+</style>
+	</head>
+	<body>
+		<canvas id="drawing"></canvas>
+		<div id="toolbox">
+			<label>
+				<span>Passes</span>
+				<input type="range" min=1 max=30 value=2 id="passes" />
+				<span class="out">2</span>
+			</label>
+			<label>
+				<span>Smoothing</span>
+				<input type="range" min=1 max=30 value=2 id="smoothing" />
+				<span class="out">2</span>
+			</label>
+		</div>
+	</body>
+</html>
