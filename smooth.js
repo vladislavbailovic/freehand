@@ -29,7 +29,7 @@ function smoothPass(dots, smoothing) {
 	return ret;
 }
 
-function render(lines, smoothing, passes) {
+function render(lines, stroke, smoothing, passes) {
 	const pad = document.getElementById("drawing");
 	const ctx = pad.getContext("2d");
 
@@ -47,19 +47,22 @@ function render(lines, smoothing, passes) {
 			let coeff = smoothing - i;
 			line = smoothPass(line, coeff);
 			let opacity = i / passes;
-			renderLine(ctx, line, `rgba(0,0,0,${opacity})`);
+			renderLine(ctx, line, stroke * opacity, `rgba(0,0,0,${opacity})`);
 		}
 	}
 	for (let line of lines) {
-		renderLine(ctx, smooth(line, smoothing, passes), "black");
+		renderLine(ctx, smooth(line, smoothing, passes), stroke, "black");
 	}
 }
 
-function renderLine(ctx, dots, color) {
+function renderLine(ctx, dots, stroke, color) {
 	if (dots.length < 2) return;
+
+	if (stroke < 1) stroke = 1;
 
 	ctx.fillStyle = "none";
 	ctx.strokeStyle = color;
+	ctx.lineWidth = stroke;
 
 	let dot = dots[0];
 	ctx.beginPath();
@@ -71,10 +74,10 @@ function renderLine(ctx, dots, color) {
 	ctx.closePath();
 	ctx.stroke();
 
-	renderLineSvg(dots, color);
+	renderLineSvg(dots, stroke, color);
 }
 
-function renderLineSvg(dots, color) {
+function renderLineSvg(dots, stroke, color) {
 	if (dots.length < 2) return;
 
 	const svg = document.getElementById("export");
@@ -89,10 +92,10 @@ function renderLineSvg(dots, color) {
 		dot = dots[i];
 		d.push(`L${dot[0]},${dot[1]}`);
 	}
-	
+
 	path.setAttribute("d", d.join(" "));
 	path.setAttribute("stroke", color);
-	path.setAttribute("stroke-width", "2");
+	path.setAttribute("stroke-width", `${stroke}`);
 	path.setAttribute("fill", "none");
 	svg.appendChild(path);
 }
@@ -100,13 +103,15 @@ function renderLineSvg(dots, color) {
 async function init() {
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
+	const stroke = document.getElementById("stroke");
 	const change = e => {
 		const out = e.target.parentNode.querySelector(".out");
 		out.innerText = e.target.value;
-		render(lines, smoothing.value || 1, passes.value || 1);
+		render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
 	};
 	smoothing.oninput = change;
 	passes.oninput = change;
+	stroke.oninput = change;
 
 	const svg = document.getElementById("export");
 	const dims = svg.getBoundingClientRect();
@@ -131,7 +136,7 @@ async function init() {
 		if (isDrawing) {
 			const dot = [e.offsetX, e.offsetY];
 			lines[currentLine].push(dot);
-			render(lines, smoothing.value || 1, passes.value || 1);
+			render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
 		}
 	};
 }
