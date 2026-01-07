@@ -33,25 +33,26 @@ function render(lines, smoothing, passes) {
 	const pad = document.getElementById("drawing");
 	const ctx = pad.getContext("2d");
 
+	const svg = document.getElementById("export");
+	svg.innerHTML = '';
+
 	ctx.fillStyle = "blanchedalmond";
 	ctx.strokeStyle = "none";
 	ctx.rect(0, 0, pad.offsetWidth, pad.offsetHeight);
 	ctx.fill();
 
-	ctx.fillStyle = "none";
-	ctx.strokeStyle = "red";
-	for (let line of lines) renderLine(ctx, line, 0, 0);
-
-	ctx.fillStyle = "none";
-	ctx.strokeStyle = "black";
-	for (let line of lines) renderLine(ctx, line, smoothing, passes);
+	for (let line of lines) renderLine(ctx, line, "red", 0, 0);
+	for (let line of lines) renderLine(ctx, line, "black", smoothing, passes);
 }
 
-function renderLine(ctx, raw, smoothing, passes) {
+function renderLine(ctx, raw, color, smoothing, passes) {
 	if (raw.length < 2) return;
 
 	const dots = smooth(raw, smoothing, passes);
 	if (dots.length < 2) return;
+
+	ctx.fillStyle = "none";
+	ctx.strokeStyle = color;
 
 	let dot = dots[0];
 	ctx.beginPath();
@@ -62,13 +63,49 @@ function renderLine(ctx, raw, smoothing, passes) {
 	}
 	ctx.closePath();
 	ctx.stroke();
+
+	renderLineSvg(dots, color);
+}
+
+function renderLineSvg(dots, color) {
+	if (dots.length < 2) return;
+
+	const svg = document.getElementById("export");
+	const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+	const d = [];
+
+	let dot = dots[0];
+	d.push(`M${dot[0]},${dot[1]}`);
+	for (let i = 1; i < dots.length; i++) {
+		d.push(`M${dot[0]},${dot[1]}`);
+		dot = dots[i];
+		d.push(`L${dot[0]},${dot[1]}`);
+	}
+	
+	path.setAttribute("d", d.join(" "));
+	path.setAttribute("stroke", color);
+	path.setAttribute("stroke-width", "2");
+	path.setAttribute("fill", "none");
+	svg.appendChild(path);
 }
 
 async function init() {
-	const pad = document.getElementById("drawing");
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
+	const change = e => {
+		const out = e.target.parentNode.querySelector(".out");
+		out.innerText = e.target.value;
+		render(lines, smoothing.value || 1, passes.value || 1);
+	};
+	smoothing.oninput = change;
+	passes.oninput = change;
 
+	const svg = document.getElementById("export");
+	const dims = svg.getBoundingClientRect();
+	svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
+
+	const pad = document.getElementById("drawing");
 	pad.width = pad.offsetWidth;
 	pad.height = pad.offsetHeight;
 
@@ -90,15 +127,6 @@ async function init() {
 			render(lines, smoothing.value || 1, passes.value || 1);
 		}
 	};
-
-	const change = e => {
-		const out = e.target.parentNode.querySelector(".out");
-		out.innerText = e.target.value;
-		render(lines, smoothing.value || 1, passes.value || 1);
-	};
-	smoothing.oninput = change;
-	passes.oninput = change;
-
 }
 
 window.onload = init;

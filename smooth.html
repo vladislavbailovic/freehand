@@ -1,18 +1,29 @@
-<?doctype html?>
+<!doctype html>
 <html>
 	<head>
 		<title>Smoothing the Free-Hand drawing</title>
 		<script src="smooth.js"></script>
 <style>
-#drawing {
+#visual {
 	height: 80vh;
 	width: 100vw;
+	display: flex;
+}
+#drawing, #export {
+	width: 50%;
+	height: 100%;
 	background-color: blanchedalmond;
 }
 </style>
 	</head>
 	<body>
-		<canvas id="drawing"></canvas>
+		<div id="visual">
+			<canvas id="drawing"></canvas>
+			<svg id="export"
+				 version="1.1"
+				 x="0px" y="0px"
+				xmlns="http://www.w3.org/2000/svg"></svg>
+		</div>
 		<div id="toolbox">
 			<label>
 				<span>Passes</span>
