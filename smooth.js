@@ -9,7 +9,7 @@ function smooth(dots, smoothing, passes) {
 }
 
 function smoothPass(dots, smoothing) {
-	if (dots.length <= smoothing) return dots;
+	if (smoothing < 1 || dots.length <= smoothing) return dots;
 	const ret = [];
 
 	ret.push(dots[0]);
@@ -33,22 +33,29 @@ function render(lines, smoothing, passes) {
 	const pad = document.getElementById("drawing");
 	const ctx = pad.getContext("2d");
 
-	const svg = document.getElementById("export");
-	svg.innerHTML = '';
-
 	ctx.fillStyle = "blanchedalmond";
 	ctx.strokeStyle = "none";
 	ctx.rect(0, 0, pad.offsetWidth, pad.offsetHeight);
 	ctx.fill();
 
-	for (let line of lines) renderLine(ctx, line, "red", 0, 0);
-	for (let line of lines) renderLine(ctx, line, "black", smoothing, passes);
+	const svg = document.getElementById("export");
+	svg.innerHTML = '';
+
+	if (passes < 1) passes = 1;
+	for (let line of lines) {
+		for (let i=1; i < passes; i++) {
+			let coeff = smoothing - i;
+			line = smoothPass(line, coeff);
+			let opacity = i / passes;
+			renderLine(ctx, line, `rgba(0,0,0,${opacity})`);
+		}
+	}
+	for (let line of lines) {
+		renderLine(ctx, smooth(line, smoothing, passes), "black");
+	}
 }
 
-function renderLine(ctx, raw, color, smoothing, passes) {
-	if (raw.length < 2) return;
-
-	const dots = smooth(raw, smoothing, passes);
+function renderLine(ctx, dots, color) {
 	if (dots.length < 2) return;
 
 	ctx.fillStyle = "none";
