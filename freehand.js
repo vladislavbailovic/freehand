@@ -45,7 +45,7 @@ function render(lines, stroke, smoothing, passes) {
 	for (let line of lines) {
 		for (let i=1; i < passes; i++) {
 			let ratio = i / passes;
-			line = smoothPass(line, Math.floor(ratio));
+			line = smoothPass(line, Math.floor(ratio * smoothing));
 			renderLine(ctx, line, stroke * ratio, `rgba(0,0,0,${ratio})`);
 		}
 	}
