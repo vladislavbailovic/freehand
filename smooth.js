@@ -44,10 +44,9 @@ function render(lines, stroke, smoothing, passes) {
 	if (passes < 1) passes = 1;
 	for (let line of lines) {
 		for (let i=1; i < passes; i++) {
-			let coeff = smoothing - i;
-			line = smoothPass(line, coeff);
-			let opacity = i / passes;
-			renderLine(ctx, line, stroke * opacity, `rgba(0,0,0,${opacity})`);
+			let ratio = i / passes;
+			line = smoothPass(line, Math.floor(ratio));
+			renderLine(ctx, line, stroke * ratio, `rgba(0,0,0,${ratio})`);
 		}
 	}
 	for (let line of lines) {
@@ -138,6 +137,17 @@ async function init() {
 			lines[currentLine].push(dot);
 			render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
 		}
+	};
+
+	const undo = document.getElementById("undo");
+	undo.onclick = e => {
+		lines.pop();
+		if (currentLine > 0) {
+			currentLine -= 1;
+			lines.pop();
+		}
+		lines.push([]);
+		render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
 	};
 }
 
