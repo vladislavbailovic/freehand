@@ -9,8 +9,8 @@
 	width: 100vw;
 	display: flex;
 }
-#drawing, #export {
-	width: 50%;
+#drawing {
+	width: 100%;
 	height: 100%;
 	background-color: blanchedalmond;
 }
@@ -32,10 +32,6 @@ label span.out {
 	<body>
 		<div id="visual">
 			<canvas id="drawing"></canvas>
-			<svg id="export"
-				 version="1.1"
-				 x="0px" y="0px"
-				xmlns="http://www.w3.org/2000/svg"></svg>
 		</div>
 		<div id="toolbox">
 			<label>
@@ -55,6 +51,7 @@ label span.out {
 			</label>
 
 			<button id="undo">Undo</button>
+			<button id="download-svg">SVG</button>
 		</div>
 	</body>
 </html>

@@ -38,9 +38,6 @@ function render(lines, stroke, smoothing, passes) {
 	ctx.rect(0, 0, pad.offsetWidth, pad.offsetHeight);
 	ctx.fill();
 
-	const svg = document.getElementById("export");
-	svg.innerHTML = '';
-
 	if (passes < 1) passes = 1;
 	for (let line of lines) {
 		for (let i=1; i < passes; i++) {
@@ -53,6 +50,7 @@ function render(lines, stroke, smoothing, passes) {
 		renderLine(ctx, smooth(line, smoothing, passes), stroke, "black");
 	}
 }
+
 
 function renderLine(ctx, dots, stroke, color) {
 	if (dots.length < 2) return;
@@ -72,14 +70,11 @@ function renderLine(ctx, dots, stroke, color) {
 	}
 	ctx.closePath();
 	ctx.stroke();
-
-	renderLineSvg(dots, stroke, color);
 }
 
-function renderLineSvg(dots, stroke, color) {
+function renderLineSvg(svg, dots, stroke, color) {
 	if (dots.length < 2) return;
 
-	const svg = document.getElementById("export");
 	const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
 
 	const d = [];
@@ -111,10 +106,6 @@ async function init() {
 	smoothing.oninput = change;
 	passes.oninput = change;
 	stroke.oninput = change;
-
-	const svg = document.getElementById("export");
-	const dims = svg.getBoundingClientRect();
-	svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
 
 	const pad = document.getElementById("drawing");
 	pad.width = pad.offsetWidth;
@@ -148,6 +139,40 @@ async function init() {
 		}
 		lines.push([]);
 		render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
+	};
+
+	const dload = document.getElementById("download-svg");
+	dload.onclick = e => {
+		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+		const dims = pad.getBoundingClientRect();
+		svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
+		svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+
+		let p = passes.value || 1;
+		let s = smoothing.value || 1;
+		let t = stroke.value || 1;
+
+		if (p < 1) p = 1;
+		for (let line of lines) {
+			for (let i=1; i < p; i++) {
+				let ratio = i / p;
+				line = smoothPass(line, Math.floor(ratio * s));
+				renderLineSvg(svg, line, t * ratio, `rgba(0,0,0,${ratio})`);
+			}
+		}
+		for (let line of lines) {
+			renderLineSvg(svg, smooth(line, s, p), t, "black");
+		}
+
+		const dl = document.createElement('a');
+		dl.href = window.URL.createObjectURL(
+			new Blob([svg.outerHTML], {"type": "text/svg" })
+		);
+		const date = new Date().toISOString().replace(/[^-a-z0-9]/gi, '-');
+		dl.download = `freehand-${date}.svg`;
+		document.body.appendChild(dl);
+		dl.click();
+		document.body.removeChild(dl);
 	};
 }
 
