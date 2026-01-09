@@ -1,20 +1,22 @@
 class Render {
-	constructor(writer) {
-		this.writer = writer;
-	}
+	setSmoothing(val) { this.smoothing = val; }
+	setPasses(val) { this.passes = val; }
+	setStroke(val) { this.stroke = val; }
 
-	render(lines, stroke, smoothing, passes) {
-		this.writer.reset();
+	render(lines, writer) {
+		writer.reset();
+		let passes = this.passes;
 		if (passes < 1) passes = 1;
+
 		for (let line of lines) {
 			for (let i=1; i < passes; i++) {
 				let ratio = i / passes;
-				line = smoothPass(line, Math.floor(ratio * smoothing));
-				this.writer.renderLine(line, stroke * ratio, `rgba(0,0,0,${ratio})`);
+				line = smoothPass(line, Math.floor(ratio * this.smoothing));
+				writer.renderLine(line, this.stroke * ratio, `rgba(0,0,0,${ratio})`);
 			}
 		}
 		for (let line of lines) {
-			this.writer.renderLine(smooth(line, smoothing, passes), stroke, "black");
+			writer.renderLine(smooth(line, this.smoothing, passes), this.stroke, "black");
 		}
 	}
 }
@@ -28,6 +30,8 @@ class CanvasWriter extends Writer {
 	constructor(el) {
 		super();
 		this.el = el;
+		this.el.width = this.el.offsetWidth;
+		this.el.height = this.el.offsetHeight;
 	}
 
 	reset() {
@@ -91,6 +95,15 @@ class SVGWriter extends Writer {
 		path.setAttribute("fill", "none");
 		this.el.appendChild(path);
 	}
+
+	static cloneFrom(source) {
+		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+		const dims = source.getBoundingClientRect();
+		svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
+		svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+
+		return new SVGWriter(svg);
+	}
 }
 
 function smooth(dots, smoothing, passes) {
@@ -127,21 +140,28 @@ function smoothPass(dots, smoothing) {
 
 async function init() {
 	const pad = document.getElementById("drawing");
-	pad.width = pad.offsetWidth;
-	pad.height = pad.offsetHeight;
-	const render = new Render(new CanvasWriter(pad));
+	const canvas = new CanvasWriter(pad);
+	const render = new Render();
 
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
 	const stroke = document.getElementById("stroke");
-	const change = e => {
-		const out = e.target.parentNode.querySelector(".out");
-		out.innerText = e.target.value;
-		render.render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
+	const change = cback => {
+		return e => {
+			cback.apply(render, [e.target.value]);
+			const out = e.target.parentNode.querySelector(".out");
+			out.innerText = e.target.value;
+			render.render(lines, canvas);
+		};
 	};
-	smoothing.oninput = change;
-	passes.oninput = change;
-	stroke.oninput = change;
+	smoothing.oninput = change(render.setSmoothing);
+	render.setSmoothing(smoothing.value || 1);
+
+	passes.oninput = change(render.setPasses);
+	render.setPasses(passes.value || 1);
+
+	stroke.oninput = change(render.setStroke);
+	render.setStroke(stroke.value || 1);
 
 	let isDrawing = false;
 	let currentLine = 0;
@@ -158,7 +178,7 @@ async function init() {
 		if (isDrawing) {
 			const dot = [e.offsetX, e.offsetY];
 			lines[currentLine].push(dot);
-			render.render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
+			render.render(lines, canvas);
 		}
 	};
 
@@ -170,25 +190,25 @@ async function init() {
 			lines.pop();
 		}
 		lines.push([]);
-		render.render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
+		render.render(lines, canvas);
 	};
 
 	const dload = document.getElementById("download-svg");
 	dload.onclick = e => {
-		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-		const dims = pad.getBoundingClientRect();
-		svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
-		svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+		const date = new Date().toISOString().replace(/[^-a-z0-9]/gi, '-');
+		const fname = `freehand-${date}.svg`;
 
-		const rd = new Render(new SVGWriter(svg));
-		rd.render(lines, stroke.value || 1, smoothing.value || 1, passes.value || 1);
+		const resp = confirm(`Download ${fname}?`);
+		if (!resp) return false;
+
+		const svg = SVGWriter.cloneFrom(pad);
+		render.render(lines, svg);
 
 		const dl = document.createElement('a');
 		dl.href = window.URL.createObjectURL(
-			new Blob([svg.outerHTML], {"type": "text/svg" })
+			new Blob([svg.el.outerHTML], {"type": "text/svg" })
 		);
-		const date = new Date().toISOString().replace(/[^-a-z0-9]/gi, '-');
-		dl.download = `freehand-${date}.svg`;
+		dl.download = fname;
 		document.body.appendChild(dl);
 		dl.click();
 		document.body.removeChild(dl);
