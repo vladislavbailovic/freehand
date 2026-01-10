@@ -29,15 +29,17 @@ class Writer {
 }
 
 class CanvasWriter extends Writer {
-	constructor(el) {
+	constructor(el, width, height) {
 		super();
 		this.el = el;
+		this.width = width;
+		this.height = height;
 		this.init();
 	}
 
 	init() {
-		this.el.width = this.el.offsetWidth;
-		this.el.height = this.el.offsetHeight;
+		this.el.width = this.width;
+		this.el.height = this.height;
 	}
 
 	reset() {
@@ -143,6 +145,15 @@ function smoothPass(dots, smoothing) {
 	return ret;
 }
 
+function shiftLinesBy(lines, x, y) {
+	for (let i = 0; i < lines.length; i++) {
+		for (let j = 0; j < lines[i].points.length; j++) {
+			lines[i].points[j].x += x;
+			lines[i].points[j].y += y;
+		}
+	}
+}
+
 class Color {
 	constructor(r, g, b) {
 		if (!Number.isFinite(r) || r < 0 || r > 1) {
@@ -232,8 +243,9 @@ class Point {
 
 
 async function init() {
+	const box = document.body.getBoundingClientRect();
 	const pad = document.getElementById("drawing");
-	const canvas = new CanvasWriter(pad);
+	const canvas = new CanvasWriter(pad, box.width, box.height);
 	const render = new Render();
 
 	window.onresize = e => canvas.init();
@@ -313,6 +325,29 @@ async function init() {
 		document.body.appendChild(dl);
 		dl.click();
 		document.body.removeChild(dl);
+	};
+
+	document.getElementById("plus-left").onclick = e => {
+		shiftLinesBy(lines, canvas.width/2, 0);
+		canvas.width += canvas.width/2;
+		canvas.init();
+		render.render(lines, canvas);
+	};
+	document.getElementById("plus-right").onclick = e => {
+		canvas.width += canvas.width/2;
+		canvas.init();
+		render.render(lines, canvas);
+	};
+	document.getElementById("plus-top").onclick = e => {
+		shiftLinesBy(lines, 0, canvas.height/2);
+		canvas.height += canvas.height/2;
+		canvas.init();
+		render.render(lines, canvas);
+	};
+	document.getElementById("plus-bottom").onclick = e => {
+		canvas.height += canvas.height/2;
+		canvas.init();
+		render.render(lines, canvas);
 	};
 }
 

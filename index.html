@@ -4,28 +4,69 @@
 		<title>Smoothing the Free-Hand drawing</title>
 		<script src="freehand.js"></script>
 <style>
+body {
+	margin: 0;
+	padding: 0;
+}
 #visual {
-	height: 80vh;
+	height: 100vh;
 	width: 100vw;
-	display: flex;
+	overflow: auto;
+	scrollbar-gutter: stable;
 }
 #drawing {
-	width: 100%;
-	height: 100%;
 	background-color: blanchedalmond;
 }
 #toolbox {
+	position: absolute;
+	bottom: 1em;
+	left: 50%;
+	transform: translate(-50%);
 	display: flex;
-	align-items: end;
+	align-items: anchor-center;
+}
+#toolbox > * {
+	margin-left: 1em;
 }
 label {
 	margin-right: 1em;
 }
 label span {
 	display: block;
+	margin-top: -1em;
 }
 label span.out {
 	display: inline;
+}
+
+#toolbox .plus {
+	position: relative;
+	height: 80px;
+	width: 80px;
+}
+#plus-left {
+	position: absolute;
+	left: 0;
+	top: 50%;
+	transform: translateY(-50%);
+}
+#plus-top {
+	position: absolute;
+	left: 50%;
+	top: 0;
+	transform: translate(-50%);
+}
+#plus-right {
+	position: absolute;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+}
+#plus-bottom {
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	transform: translate(-50%);
 }
 </style>
 	</head>
@@ -56,6 +97,13 @@ label span.out {
 
 			<button id="undo">Undo</button>
 			<button id="download-svg">SVG</button>
+
+			<div class="plus">
+				<button id="plus-left">+</button>
+				<button id="plus-top">+</button>
+				<button id="plus-right">+</button>
+				<button id="plus-bottom">+</button>
+			</div>
 		</div>
 	</body>
 </html>
