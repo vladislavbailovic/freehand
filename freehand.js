@@ -30,6 +30,9 @@ class CanvasWriter extends Writer {
 	constructor(el) {
 		super();
 		this.el = el;
+	}
+
+	init() {
 		this.el.width = this.el.offsetWidth;
 		this.el.height = this.el.offsetHeight;
 	}
@@ -142,6 +145,11 @@ async function init() {
 	const pad = document.getElementById("drawing");
 	const canvas = new CanvasWriter(pad);
 	const render = new Render();
+
+	window.onresize = e => {
+		console.log("resize");
+		canvas.init();
+	};
 
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
