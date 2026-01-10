@@ -9,14 +9,16 @@ class Render {
 		if (passes < 1) passes = 1;
 
 		for (let line of lines) {
+			let dots = line.dots();
 			for (let i=1; i < passes; i++) {
 				let ratio = i / passes;
-				line = smoothPass(line, Math.floor(ratio * this.smoothing));
-				writer.renderLine(line, this.stroke * ratio, `rgba(0,0,0,${ratio})`);
+				dots = smoothPass(dots, Math.floor(ratio * this.smoothing));
+				writer.renderLine(dots, this.stroke * ratio, line.color.toRGBA(ratio));
 			}
 		}
 		for (let line of lines) {
-			writer.renderLine(smooth(line, this.smoothing, passes), this.stroke, "black");
+			let dots = line.dots();
+			writer.renderLine(smooth(dots, this.smoothing, passes), this.stroke, line.color.toRGB());
 		}
 	}
 }
@@ -30,6 +32,7 @@ class CanvasWriter extends Writer {
 	constructor(el) {
 		super();
 		this.el = el;
+		this.init();
 	}
 
 	init() {
@@ -140,16 +143,100 @@ function smoothPass(dots, smoothing) {
 	return ret;
 }
 
+class Color {
+	constructor(r, g, b) {
+		if (!Number.isFinite(r) || r < 0 || r > 1) {
+			throw new Error(`Invalid red channel value: ${r}`);
+		}
+		this.r = r;
+		if (!Number.isFinite(g) || g < 0 || g > 1) {
+			throw new Error(`Invalid green channel value: ${g}`);
+		}
+		this.g = g;
+		if (!Number.isFinite(b) || b < 0 || b > 1) {
+			throw new Error(`Invalid blue channel value: ${b}`);
+		}
+		this.b = b;
+	}
+
+	toRGBA(opacity) {
+		if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+			throw new Error(`Invalid opacity value: ${opacity}`);
+		}
+		let r = Math.round(this.r * 255);
+		let g = Math.round(this.g * 255);
+		let b = Math.round(this.b * 255);
+		return `rgba(${r},${g},${b},${opacity})`;
+	}
+
+	toRGB() {
+		let r = Math.round(this.r * 255);
+		let g = Math.round(this.g * 255);
+		let b = Math.round(this.b * 255);
+		return `rgb(${r},${g},${b})`;
+	}
+
+	static fromRGBString(val) {
+		if (val.length < 7) throw new Error(`Invalid color string: ${val}`);
+		return new Color(
+			parseInt(val.slice(1, 3), 16) / 255,
+			parseInt(val.slice(3, 5), 16) / 255,
+			parseInt(val.slice(5, 7), 16) / 255,
+		);
+	}
+}
+
+class Line {
+	points;
+	color;
+
+	constructor(color) {
+		this.points = [];
+		this.setColor(color);
+	}
+
+	setColor(color) {
+		if (!(color instanceof Color)) {
+			throw new Error(`Invalid color value: ${color}`);
+		}
+		this.color = color;
+	}
+
+	add(p) {
+		if (!(p instanceof Point)) {
+			throw new Error("Can't add non-point");
+		}
+		this.points.push(p);
+	}
+
+	dots() {
+		return this.points.map(p => [p.x, p.y]);
+	}
+}
+
+class Point {
+	x;
+	y;
+
+	constructor(x, y) {
+		if (!Number.isFinite(x)) {
+			throw new Error(`Invalid coordinate X: ${x}`);
+		}
+		if (!Number.isFinite(y)) {
+			throw new Error(`Invalid coordinate Y: ${y}`);
+		}
+		this.x = x;
+		this.y = y;
+	}
+}
+
 
 async function init() {
 	const pad = document.getElementById("drawing");
 	const canvas = new CanvasWriter(pad);
 	const render = new Render();
 
-	window.onresize = e => {
-		console.log("resize");
-		canvas.init();
-	};
+	window.onresize = e => canvas.init();
 
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
@@ -171,21 +258,27 @@ async function init() {
 	stroke.oninput = change(render.setStroke);
 	render.setStroke(stroke.value || 1);
 
+	let color = document.getElementById("foreground");
 	let isDrawing = false;
-	let currentLine = 0;
-	const lines = [[]];
+	let currentLine = new Line(Color.fromRGBString(color.value));
+	const lines = [currentLine];
+
+	color.onchange = e => {
+		currentLine.setColor(Color.fromRGBString(color.value));
+	};
+
 	pad.onmousedown = e => {
 		isDrawing = true;
 	};
 	pad.onmouseup = e => {
 		isDrawing = false;
-		currentLine += 1;
-		lines.push([]);
+
+		currentLine = new Line(Color.fromRGBString(color.value));
+		lines.push(currentLine);
 	};
 	pad.onmousemove = e => {
 		if (isDrawing) {
-			const dot = [e.offsetX, e.offsetY];
-			lines[currentLine].push(dot);
+			currentLine.add(new Point(e.offsetX, e.offsetY));
 			render.render(lines, canvas);
 		}
 	};
@@ -193,11 +286,11 @@ async function init() {
 	const undo = document.getElementById("undo");
 	undo.onclick = e => {
 		lines.pop();
-		if (currentLine > 0) {
-			currentLine -= 1;
+		if (lines.length > 0) {
 			lines.pop();
 		}
-		lines.push([]);
+		currentLine = new Line(Color.fromRGBString(color.value));
+		lines.push(currentLine);
 		render.render(lines, canvas);
 	};
 
