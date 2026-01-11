@@ -3,8 +3,13 @@ class Render {
 	setPasses(val) { this.passes = val; }
 	setStroke(val) { this.stroke = val; }
 
-	render(lines, writer) {
+	async render(lines, images, writer) {
 		writer.reset();
+
+		for (let image of images) {
+			await writer.renderDataURL(image.point, image.dataURL);
+		}
+
 		let passes = this.passes;
 		if (passes < 1) passes = 1;
 
@@ -28,6 +33,7 @@ class Writer {
 	swap() { throw new Error("implement swap"); }
 	reset() { throw new Error("implement reset"); }
 	renderLine() { throw new Error("implement renderLine"); }
+	renderDataURL() { throw new Error("implement renderDataURL"); }
 }
 
 class CanvasWriter extends Writer {
@@ -78,6 +84,19 @@ class CanvasWriter extends Writer {
 		ctx.closePath();
 		ctx.stroke();
 	}
+
+	renderDataURL(pt, dataURL) {
+		return new Promise((resolve, reject) => {
+			if (!(pt instanceof Point)) return reject("Expected point");
+			const img = new Image();
+			img.onload = e => {
+				let ctx = this.el.getContext("2d");
+				ctx.drawImage(img, pt.x, pt.y);
+				resolve();
+			};
+			img.src = dataURL;
+		});
+	}
 }
 
 class SVGWriter extends Writer {
@@ -88,6 +107,10 @@ class SVGWriter extends Writer {
 
 	reset() {
 		this.el.innerHTML = '';
+	}
+
+	swap() {
+		// Not a real-time writer, no need to swap buffers
 	}
 
 	renderLine(dots, stroke, color) {
@@ -110,6 +133,17 @@ class SVGWriter extends Writer {
 		path.setAttribute("stroke-width", `${stroke}`);
 		path.setAttribute("fill", "none");
 		this.el.appendChild(path);
+	}
+
+	renderDataURL(pt, dataURL) {
+		if (!(pt instanceof Point)) {
+			throw new Error("Expected point");
+		}
+		const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
+		img.setAttribute("x", pt.x);
+		img.setAttribute("y", pt.y);
+		img.setAttribute("href", dataURL);
+		this.el.appendChild(img);
 	}
 
 	static cloneFrom(source) {
@@ -249,14 +283,32 @@ class Point {
 	}
 }
 
+class DataImage {
+	constructor(pt, dataURL) {
+		if (!(pt instanceof Point)) {
+			throw new Error("expected point");
+		}
+		this.point = new Point(pt.x, pt.y);
+		this.dataURL = dataURL;
+	}
+
+	static async fromBlobAt(blob, pos) {
+		if (!(pos instanceof Point)) throw new Error("expected point");
+		const dataURL = await(new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result);
+			reader.onerror = reject;
+			reader.readAsDataURL(blob);
+		}));
+		return new DataImage(pos, dataURL);
+	}
+}
 
 async function init() {
 	const box = document.body.getBoundingClientRect();
 	const pad = document.getElementById("drawing");
 	const canvas = new CanvasWriter(pad, box.width, box.height);
 	const render = new Render();
-
-	window.onresize = e => canvas.init();
 
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
@@ -266,7 +318,7 @@ async function init() {
 			cback.apply(render, [e.target.value]);
 			const out = e.target.parentNode.querySelector(".out");
 			out.innerText = e.target.value;
-			render.render(lines, canvas);
+			render.render(lines, images, canvas);
 		};
 	};
 	smoothing.oninput = change(render.setSmoothing);
@@ -281,7 +333,9 @@ async function init() {
 	let color = document.getElementById("foreground");
 	let isDrawing = false;
 	let currentLine = new Line(Color.fromRGBString(color.value));
+	let lastPos = new Point(0, 0);
 	const lines = [currentLine];
+	const images = [];
 
 	color.onchange = e => {
 		currentLine.setColor(Color.fromRGBString(color.value));
@@ -289,6 +343,7 @@ async function init() {
 
 	pad.onmousedown = e => {
 		isDrawing = true;
+		lastPos = new Point(e.offsetX, e.offsetY);
 	};
 	pad.onmouseup = e => {
 		isDrawing = false;
@@ -299,9 +354,21 @@ async function init() {
 	pad.onmousemove = e => {
 		if (isDrawing) {
 			currentLine.add(new Point(e.offsetX, e.offsetY));
-			render.render(lines, canvas);
+			render.render(lines, images, canvas);
 		}
 	};
+
+	document.addEventListener("paste", async (e) => {
+		const items = e.clipboardData.items;
+		for (let item of items) {
+			if (item.type === "image/png") {
+				const blob = item.getAsFile();
+				images.push(await DataImage.fromBlobAt(blob, lastPos));
+			}
+		}
+		e.preventDefault();
+		render.render(lines, images, canvas);
+	});
 
 	const undo = document.getElementById("undo");
 	undo.onclick = e => {
@@ -311,7 +378,7 @@ async function init() {
 		}
 		currentLine = new Line(Color.fromRGBString(color.value));
 		lines.push(currentLine);
-		render.render(lines, canvas);
+		render.render(lines, images, canvas);
 	};
 
 	const dload = document.getElementById("download-svg");
@@ -323,7 +390,7 @@ async function init() {
 		if (!resp) return false;
 
 		const svg = SVGWriter.cloneFrom(pad);
-		render.render(lines, svg);
+		render.render(lines, images, svg);
 
 		const dl = document.createElement('a');
 		dl.href = window.URL.createObjectURL(
@@ -339,24 +406,30 @@ async function init() {
 		shiftLinesBy(lines, canvas.width/2, 0);
 		canvas.width += canvas.width/2;
 		canvas.init();
-		render.render(lines, canvas);
+		render.render(lines, images, canvas);
 	};
 	document.getElementById("plus-right").onclick = e => {
 		canvas.width += canvas.width/2;
 		canvas.init();
-		render.render(lines, canvas);
+		render.render(lines, images, canvas);
 	};
 	document.getElementById("plus-top").onclick = e => {
 		shiftLinesBy(lines, 0, canvas.height/2);
 		canvas.height += canvas.height/2;
 		canvas.init();
-		render.render(lines, canvas);
+		render.render(lines, images, canvas);
 	};
 	document.getElementById("plus-bottom").onclick = e => {
 		canvas.height += canvas.height/2;
 		canvas.init();
-		render.render(lines, canvas);
+		render.render(lines, images, canvas);
 	};
+
+	window.onresize = e => {
+		canvas.init();
+		render.render(lines, images, canvas);
+	}
+
 }
 
 window.onload = init;
