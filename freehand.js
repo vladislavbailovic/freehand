@@ -284,6 +284,8 @@ class Point {
 }
 
 class DataImage {
+	width = 0;
+	height = 0;
 	constructor(pt, dataURL) {
 		if (!(pt instanceof Point)) {
 			throw new Error("expected point");
@@ -300,7 +302,12 @@ class DataImage {
 			reader.onerror = reject;
 			reader.readAsDataURL(blob);
 		}));
-		return new DataImage(pos, dataURL);
+		const bmp = await createImageBitmap(blob);
+		const me = new DataImage(pos, dataURL);
+		me.width = bmp.width;
+		me.heigh = bmp.height;
+		console.log(me);
+		return me;
 	}
 }
 
