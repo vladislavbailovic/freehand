@@ -20,10 +20,12 @@ class Render {
 			let dots = line.dots();
 			writer.renderLine(smooth(dots, this.smoothing, passes), this.stroke, line.color.toRGB());
 		}
+		writer.swap();
 	}
 }
 
 class Writer {
+	swap() { throw new Error("implement swap"); }
 	reset() { throw new Error("implement reset"); }
 	renderLine() { throw new Error("implement renderLine"); }
 }
@@ -31,7 +33,8 @@ class Writer {
 class CanvasWriter extends Writer {
 	constructor(el, width, height) {
 		super();
-		this.el = el;
+		this.el = document.createElement("canvas");
+		this.buffer = el;
 		this.width = width;
 		this.height = height;
 		this.init();
@@ -39,15 +42,20 @@ class CanvasWriter extends Writer {
 
 	init() {
 		this.el.width = this.width;
+		this.buffer.width = this.width;
 		this.el.height = this.height;
+		this.buffer.height = this.height;
 	}
 
 	reset() {
 		const ctx = this.el.getContext("2d");
-		ctx.fillStyle = "blanchedalmond";
-		ctx.strokeStyle = "none";
-		ctx.rect(0, 0, this.el.offsetWidth, this.el.offsetHeight);
-		ctx.fill();
+		ctx.clearRect(0, 0, this.el.width, this.el.height);
+	}
+
+	swap() {
+		const ctx = this.buffer.getContext("2d");
+		ctx.clearRect(0, 0, this.el.width, this.el.height);
+		ctx.drawImage(this.el, 0, 0);
 	}
 
 	renderLine(dots, stroke, color) {
