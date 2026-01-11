@@ -196,6 +196,13 @@ function shiftLinesBy(lines, x, y) {
 	}
 }
 
+function shiftImagesBy(images, x, y) {
+	for (let i = 0; i < images.length; i++) {
+		images[i].point.x += x;
+		images[i].point.y += y;
+	}
+}
+
 class Color {
 	constructor(r, g, b) {
 		if (!Number.isFinite(r) || r < 0 || r > 1) {
@@ -411,6 +418,7 @@ async function init() {
 
 	document.getElementById("plus-left").onclick = e => {
 		shiftLinesBy(lines, canvas.width/2, 0);
+		shiftImagesBy(images, canvas.width/2, 0);
 		canvas.width += canvas.width/2;
 		canvas.init();
 		render.render(lines, images, canvas);
@@ -422,6 +430,7 @@ async function init() {
 	};
 	document.getElementById("plus-top").onclick = e => {
 		shiftLinesBy(lines, 0, canvas.height/2);
+		shiftImagesBy(images, 0, canvas.height/2);
 		canvas.height += canvas.height/2;
 		canvas.init();
 		render.render(lines, images, canvas);
