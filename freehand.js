@@ -318,6 +318,36 @@ class DataImage {
 	}
 }
 
+function getMinPoint(lines, images) {
+	const min = new Point(Number.MAX_VALUE, Number.MAX_VALUE);
+	for (let line of lines) {
+		for (let point of line.points) {
+			min.x = Math.min(min.x, point.x);
+			min.y = Math.min(min.y, point.y);
+		}
+	}
+	for (let img of images) {
+		min.x = Math.min(min.x, img.point.x);
+		min.y = Math.min(min.y, img.point.y);
+	}
+	return min;
+}
+
+function getMaxPoint(lines, images) {
+	const max = new Point(0, 0);
+	for (let line of lines) {
+		for (let point of line.points) {
+			max.x = Math.max(max.x, point.x);
+			max.y = Math.max(max.y, point.y);
+		}
+	}
+	for (let img of images) {
+		max.x = Math.max(max.x, img.point.x + img.width);
+		max.y = Math.max(max.y, img.point.y + img.height);
+	}
+	return max;
+}
+
 async function init() {
 	const box = document.body.getBoundingClientRect();
 	const pad = document.getElementById("drawing");
@@ -383,6 +413,20 @@ async function init() {
 		e.preventDefault();
 		render.render(lines, images, canvas);
 	});
+
+	const crop = document.getElementById("crop");
+	crop.onclick = e => {
+		const min = getMinPoint(lines, images);
+		const max = getMaxPoint(lines, images);
+		shiftLinesBy(lines, -1 * min.x, -1 * min.y);
+		shiftImagesBy(images, -1 * min.x, -1 * min.y);
+
+		canvas.width = max.x - min.x;
+		canvas.height = max.y - min.y;
+		canvas.init();
+
+		render.render(lines, images, canvas);
+	};
 
 	const undo = document.getElementById("undo");
 	undo.onclick = e => {
