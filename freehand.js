@@ -313,7 +313,6 @@ class DataImage {
 		const me = new DataImage(pos, dataURL);
 		me.width = bmp.width;
 		me.heigh = bmp.height;
-		console.log(me);
 		return me;
 	}
 }
