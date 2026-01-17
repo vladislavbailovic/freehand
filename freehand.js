@@ -241,6 +241,7 @@ class Line {
 
 	smooth(smoothing, passes) {
 		let ret = this.clone();
+		if (smoothing < 1 || this.points.length <= smoothing) return ret;
 		for (let i = 0; i < passes; i++) {
 			ret = ret.smoothPass(smoothing);
 		}
