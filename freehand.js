@@ -30,10 +30,12 @@ class Render {
 }
 
 class Writer {
-	swap() { throw new Error("implement swap"); }
 	reset() { throw new Error("implement reset"); }
 	renderLine() { throw new Error("implement renderLine"); }
 	renderDataURL() { throw new Error("implement renderDataURL"); }
+	swap() {
+		// by default, no double-buffering
+	}
 }
 
 class CanvasWriter extends Writer {
@@ -109,9 +111,6 @@ class SVGWriter extends Writer {
 		this.el.innerHTML = '';
 	}
 
-	swap() {
-		// Not a real-time writer, no need to swap buffers
-	}
 
 	renderLine(dots, stroke, color) {
 		if (dots.length < 2) return;
