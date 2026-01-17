@@ -533,6 +533,12 @@ async function init() {
 		drawables.add(currentLine);
 		drawing.draw(drawables, canvas);
 	};
+	document.addEventListener("keydown", e => {
+		if (e.ctrlKey && e.key === 'z') {
+			e.preventDefault();
+			undo.click();
+		}
+	});
 
 	const dload = document.getElementById("download-svg");
 	dload.onclick = async e => {
