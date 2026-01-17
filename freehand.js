@@ -8,25 +8,27 @@ class Drawing {
 		if (!(renderer instanceof Renderer)) throw new Error("expected renderer");
 		renderer.reset();
 
-		for (let image of drawables.getImages()) {
-			await renderer.renderDataURL(image.point, image.dataURL);
-		}
-
 		let passes = this.passes;
 		if (passes < 1) passes = 1;
-
-		const lines = drawables.getLines();
-		for (let line of lines) {
-			let dots = line.clone();
-			for (let i=1; i < passes; i++) {
-				let ratio = i / passes;
-				dots = dots.smoothPass(Math.floor(ratio * this.smoothing));
-				renderer.renderLine(dots, this.stroke * ratio, line.color.toRGBA(ratio));
+		for (let drawable of drawables.items) {
+			switch(true) {
+				case drawable.item instanceof DataImage:
+					await renderer.renderDataURL(drawable.item.point, drawable.item.dataURL);
+					break;
+				case drawable.item instanceof Line:
+					let line = drawable.item.clone();
+					for (let i=1; i < passes; i++) {
+						let ratio = i / passes;
+						line = line.smoothPass(Math.floor(ratio * this.smoothing));
+						renderer.renderLine(line, this.stroke * ratio, line.color.toRGBA(ratio));
+					}
+					renderer.renderLine(drawable.item.smooth(this.smoothing, passes), this.stroke, line.color.toRGB());
+					break;
+				default:
+					throw new Error("invalid drawable");
 			}
 		}
-		for (let line of lines) {
-			renderer.renderLine(line.smooth(this.smoothing, passes), this.stroke, line.color.toRGB());
-		}
+
 		renderer.swap();
 	}
 }
@@ -497,7 +499,10 @@ async function init() {
 			}
 		}
 		e.preventDefault();
-		drawing.draw(drawables, canvas);
+		await drawing.draw(drawables, canvas);
+
+		currentLine = new Line(Color.fromRGBString(color.value));
+		drawables.add(currentLine);
 	});
 
 	const crop = document.getElementById("crop");
