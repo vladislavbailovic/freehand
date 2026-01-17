@@ -1,13 +1,15 @@
-class Render {
+class Drawing {
 	setSmoothing(val) { this.smoothing = val; }
 	setPasses(val) { this.passes = val; }
 	setStroke(val) { this.stroke = val; }
 
-	async render(drawables, writer) {
-		writer.reset();
+	async draw(drawables, renderer) {
+		if (!(drawables instanceof Drawables)) throw new Error("expected drawables");
+		if (!(renderer instanceof Renderer)) throw new Error("expected renderer");
+		renderer.reset();
 
 		for (let image of drawables.getImages()) {
-			await writer.renderDataURL(image.point, image.dataURL);
+			await renderer.renderDataURL(image.point, image.dataURL);
 		}
 
 		let passes = this.passes;
@@ -19,17 +21,17 @@ class Render {
 			for (let i=1; i < passes; i++) {
 				let ratio = i / passes;
 				dots = dots.smoothPass(Math.floor(ratio * this.smoothing));
-				writer.renderLine(dots, this.stroke * ratio, line.color.toRGBA(ratio));
+				renderer.renderLine(dots, this.stroke * ratio, line.color.toRGBA(ratio));
 			}
 		}
 		for (let line of lines) {
-			writer.renderLine(line.smooth(this.smoothing, passes), this.stroke, line.color.toRGB());
+			renderer.renderLine(line.smooth(this.smoothing, passes), this.stroke, line.color.toRGB());
 		}
-		writer.swap();
+		renderer.swap();
 	}
 }
 
-class Writer {
+class Renderer {
 	reset() { throw new Error("implement reset"); }
 	renderLine() { throw new Error("implement renderLine"); }
 	renderDataURL() { throw new Error("implement renderDataURL"); }
@@ -38,7 +40,7 @@ class Writer {
 	}
 }
 
-class CanvasWriter extends Writer {
+class CanvasRenderer extends Renderer {
 	constructor(el, width, height) {
 		super();
 		this.el = document.createElement("canvas");
@@ -101,7 +103,7 @@ class CanvasWriter extends Writer {
 	}
 }
 
-class SVGWriter extends Writer {
+class SVGRenderer extends Renderer {
 	constructor(el) {
 		super();
 		this.el = el;
@@ -151,7 +153,7 @@ class SVGWriter extends Writer {
 		svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
 		svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 
-		return new SVGWriter(svg);
+		return new SVGRenderer(svg);
 	}
 }
 
@@ -435,28 +437,28 @@ class Drawables {
 async function init() {
 	const box = document.body.getBoundingClientRect();
 	const pad = document.getElementById("drawing");
-	const canvas = new CanvasWriter(pad, box.width, box.height);
-	const render = new Render();
+	const canvas = new CanvasRenderer(pad, box.width, box.height);
+	const drawing = new Drawing();
 
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
 	const stroke = document.getElementById("stroke");
 	const change = cback => {
 		return e => {
-			cback.apply(render, [e.target.value]);
+			cback.apply(drawing, [e.target.value]);
 			const out = e.target.parentNode.querySelector(".out");
 			out.innerText = e.target.value;
-			render.render(drawables, canvas);
+			drawing.draw(drawables, canvas);
 		};
 	};
-	smoothing.oninput = change(render.setSmoothing);
-	render.setSmoothing(smoothing.value || 1);
+	smoothing.oninput = change(drawing.setSmoothing);
+	drawing.setSmoothing(smoothing.value || 1);
 
-	passes.oninput = change(render.setPasses);
-	render.setPasses(passes.value || 1);
+	passes.oninput = change(drawing.setPasses);
+	drawing.setPasses(passes.value || 1);
 
-	stroke.oninput = change(render.setStroke);
-	render.setStroke(stroke.value || 1);
+	stroke.oninput = change(drawing.setStroke);
+	drawing.setStroke(stroke.value || 1);
 
 	let color = document.getElementById("foreground");
 	let isDrawing = false;
@@ -482,7 +484,7 @@ async function init() {
 	pad.onmousemove = e => {
 		if (isDrawing) {
 			currentLine.add(new Point(e.offsetX, e.offsetY));
-			render.render(drawables, canvas);
+			drawing.draw(drawables, canvas);
 		}
 	};
 
@@ -495,7 +497,7 @@ async function init() {
 			}
 		}
 		e.preventDefault();
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	});
 
 	const crop = document.getElementById("crop");
@@ -508,7 +510,7 @@ async function init() {
 		canvas.height = max.y - min.y;
 		canvas.init();
 
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	};
 
 	const undo = document.getElementById("undo");
@@ -519,7 +521,7 @@ async function init() {
 		}
 		currentLine = new Line(Color.fromRGBString(color.value));
 		drawables.add(currentLine);
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	};
 
 	const dload = document.getElementById("download-svg");
@@ -530,8 +532,8 @@ async function init() {
 		const resp = confirm(`Download ${fname}?`);
 		if (!resp) return false;
 
-		const svg = SVGWriter.cloneFrom(pad);
-		await render.render(drawables, svg);
+		const svg = SVGRenderer.cloneFrom(pad);
+		await drawing.draw(drawables, svg);
 
 		const dl = document.createElement('a');
 		dl.href = window.URL.createObjectURL(
@@ -547,28 +549,28 @@ async function init() {
 		drawables.shiftBy(canvas.width/2, 0);
 		canvas.width += canvas.width/2;
 		canvas.init();
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("plus-right").onclick = e => {
 		canvas.width += canvas.width/2;
 		canvas.init();
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("plus-top").onclick = e => {
 		drawables.shiftBy(0, canvas.height/2);
 		canvas.height += canvas.height/2;
 		canvas.init();
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("plus-bottom").onclick = e => {
 		canvas.height += canvas.height/2;
 		canvas.init();
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	};
 
 	window.onresize = e => {
 		canvas.init();
-		render.render(drawables, canvas);
+		drawing.draw(drawables, canvas);
 	}
 
 }
