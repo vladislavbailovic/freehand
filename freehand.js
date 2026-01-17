@@ -3,16 +3,17 @@ class Render {
 	setPasses(val) { this.passes = val; }
 	setStroke(val) { this.stroke = val; }
 
-	async render(lines, images, writer) {
+	async render(drawables, writer) {
 		writer.reset();
 
-		for (let image of images) {
+		for (let image of drawables.getImages()) {
 			await writer.renderDataURL(image.point, image.dataURL);
 		}
 
 		let passes = this.passes;
 		if (passes < 1) passes = 1;
 
+		const lines = drawables.getLines();
 		for (let line of lines) {
 			let dots = line.clone();
 			for (let i=1; i < passes; i++) {
@@ -154,21 +155,6 @@ class SVGWriter extends Writer {
 	}
 }
 
-function shiftLinesBy(lines, x, y) {
-	for (let i = 0; i < lines.length; i++) {
-		for (let j = 0; j < lines[i].points.length; j++) {
-			lines[i].points[j].x += x;
-			lines[i].points[j].y += y;
-		}
-	}
-}
-
-function shiftImagesBy(images, x, y) {
-	for (let i = 0; i < images.length; i++) {
-		images[i].point.x += x;
-		images[i].point.y += y;
-	}
-}
 
 class Color {
 	constructor(r, g, b) {
@@ -314,39 +300,136 @@ class DataImage {
 		const bmp = await createImageBitmap(blob);
 		const me = new DataImage(pos, dataURL);
 		me.width = bmp.width;
-		me.heigh = bmp.height;
+		me.height = bmp.height;
 		return me;
 	}
 }
 
-function getMinPoint(lines, images) {
-	const min = new Point(Number.MAX_VALUE, Number.MAX_VALUE);
-	for (let line of lines) {
-		for (let point of line.points) {
-			min.x = Math.min(min.x, point.x);
-			min.y = Math.min(min.y, point.y);
+class Drawable {
+	item;
+
+	constructor(item) {
+		if (
+			!(item instanceof Line) &&
+			!(item instanceof DataImage)
+		) throw new Error("Invalid drawable");
+		this.item = item;
+	}
+
+	shiftBy(x, y) {
+		switch(true) {
+			case this.item instanceof Line:
+				for (let i = 0; i < this.item.points.length; i++) {
+					this.item.points[i].x += x;
+					this.item.points[i].y += y;
+				}
+				break;
+			case this.item instanceof DataImage:
+				this.item.point.x += x;
+				this.item.point.y += y;
+				break;
+			default:
+				throw new Error("invalid drawable");
 		}
 	}
-	for (let img of images) {
-		min.x = Math.min(min.x, img.point.x);
-		min.y = Math.min(min.y, img.point.y);
+
+	getMinPoint() {
+		const min = new Point(Number.MAX_VALUE, Number.MAX_VALUE);
+		switch(true) {
+			case this.item instanceof Line:
+				for (let point of this.item.points) {
+					min.x = Math.min(min.x, point.x);
+					min.y = Math.min(min.y, point.y);
+				}
+				break;
+			case this.item instanceof DataImage:
+				min.x = Math.min(min.x, this.item.point.x);
+				min.y = Math.min(min.y, this.item.point.y);
+				break;
+			default:
+				throw new Error("invalid drawable");
+		}
+		return min;
 	}
-	return min;
+
+	getMaxPoint() {
+		const max = new Point(0, 0);
+		switch(true) {
+			case this.item instanceof Line:
+				for (let point of this.item.points) {
+					max.x = Math.max(max.x, point.x);
+					max.y = Math.max(max.y, point.y);
+				}
+				break;
+			case this.item instanceof DataImage:
+				max.x = Math.max(max.x, this.item.point.x + this.item.width);
+				max.y = Math.max(max.y, this.item.point.y + this.item.height);
+				break;
+			default:
+				throw new Error("invalid drawable");
+		}
+		return max;
+	}
 }
 
-function getMaxPoint(lines, images) {
-	const max = new Point(0, 0);
-	for (let line of lines) {
-		for (let point of line.points) {
-			max.x = Math.max(max.x, point.x);
-			max.y = Math.max(max.y, point.y);
+class Drawables {
+	items = [];
+
+	add(item) {
+		this.items.push(new Drawable(item));
+	}
+
+	remove() {
+		if (this.items.length > 0) {
+			this.items.pop();
 		}
 	}
-	for (let img of images) {
-		max.x = Math.max(max.x, img.point.x + img.width);
-		max.y = Math.max(max.y, img.point.y + img.height);
+
+	shiftBy(x, y) {
+		for(let i = 0; i < this.items.length; i++) {
+			this.items[i].shiftBy(x, y);
+		}
 	}
-	return max;
+
+	getLines() {
+		const ret = [];
+		for(let item of this.items) {
+			if (item.item instanceof Line) {
+				ret.push(item.item);
+			}
+		}
+		return ret;
+	}
+
+	getImages() {
+		const ret = [];
+		for(let item of this.items) {
+			if (item.item instanceof DataImage) {
+				ret.push(item.item);
+			}
+		}
+		return ret;
+	}
+
+	getMaxPoint() {
+		const max = new Point(0, 0);
+		for(let i = 0; i < this.items.length; i++) {
+			const pt = this.items[i].getMaxPoint();
+			max.x = Math.max(max.x, pt.x);
+			max.y = Math.max(max.y, pt.y);
+		}
+		return max;
+	}
+
+	getMinPoint() {
+		const min = new Point(Number.MAX_VALUE, Number.MAX_VALUE);
+		for(let i = 0; i < this.items.length; i++) {
+			const pt = this.items[i].getMinPoint();
+			min.x = Math.min(min.x, pt.x);
+			min.y = Math.min(min.y, pt.y);
+		}
+		return min;
+	}
 }
 
 async function init() {
@@ -363,7 +446,7 @@ async function init() {
 			cback.apply(render, [e.target.value]);
 			const out = e.target.parentNode.querySelector(".out");
 			out.innerText = e.target.value;
-			render.render(lines, images, canvas);
+			render.render(drawables, canvas);
 		};
 	};
 	smoothing.oninput = change(render.setSmoothing);
@@ -379,8 +462,8 @@ async function init() {
 	let isDrawing = false;
 	let currentLine = new Line(Color.fromRGBString(color.value));
 	let lastPos = new Point(0, 0);
-	const lines = [currentLine];
-	const images = [];
+	const drawables = new Drawables();
+	drawables.add(currentLine);
 
 	color.onchange = e => {
 		currentLine.setColor(Color.fromRGBString(color.value));
@@ -394,12 +477,12 @@ async function init() {
 		isDrawing = false;
 
 		currentLine = new Line(Color.fromRGBString(color.value));
-		lines.push(currentLine);
+		drawables.add(currentLine);
 	};
 	pad.onmousemove = e => {
 		if (isDrawing) {
 			currentLine.add(new Point(e.offsetX, e.offsetY));
-			render.render(lines, images, canvas);
+			render.render(drawables, canvas);
 		}
 	};
 
@@ -408,40 +491,39 @@ async function init() {
 		for (let item of items) {
 			if (item.type === "image/png") {
 				const blob = item.getAsFile();
-				images.push(await DataImage.fromBlobAt(blob, lastPos));
+				drawables.add(await DataImage.fromBlobAt(blob, lastPos));
 			}
 		}
 		e.preventDefault();
-		render.render(lines, images, canvas);
+		render.render(drawables, canvas);
 	});
 
 	const crop = document.getElementById("crop");
 	crop.onclick = e => {
-		const min = getMinPoint(lines, images);
-		const max = getMaxPoint(lines, images);
-		shiftLinesBy(lines, -1 * min.x, -1 * min.y);
-		shiftImagesBy(images, -1 * min.x, -1 * min.y);
+		const min = drawables.getMinPoint();
+		const max = drawables.getMaxPoint();
+		drawables.shiftBy(-1 * min.x, -1 * min.y);
 
 		canvas.width = max.x - min.x;
 		canvas.height = max.y - min.y;
 		canvas.init();
 
-		render.render(lines, images, canvas);
+		render.render(drawables, canvas);
 	};
 
 	const undo = document.getElementById("undo");
 	undo.onclick = e => {
-		lines.pop();
-		if (lines.length > 0) {
-			lines.pop();
+		drawables.remove();
+		if (drawables.items.length > 0) {
+			drawables.remove();
 		}
 		currentLine = new Line(Color.fromRGBString(color.value));
-		lines.push(currentLine);
-		render.render(lines, images, canvas);
+		drawables.add(currentLine);
+		render.render(drawables, canvas);
 	};
 
 	const dload = document.getElementById("download-svg");
-	dload.onclick = e => {
+	dload.onclick = async e => {
 		const date = new Date().toISOString().replace(/[^-a-z0-9]/gi, '-');
 		const fname = `freehand-${date}.svg`;
 
@@ -449,7 +531,7 @@ async function init() {
 		if (!resp) return false;
 
 		const svg = SVGWriter.cloneFrom(pad);
-		render.render(lines, images, svg);
+		await render.render(drawables, svg);
 
 		const dl = document.createElement('a');
 		dl.href = window.URL.createObjectURL(
@@ -462,33 +544,31 @@ async function init() {
 	};
 
 	document.getElementById("plus-left").onclick = e => {
-		shiftLinesBy(lines, canvas.width/2, 0);
-		shiftImagesBy(images, canvas.width/2, 0);
+		drawables.shiftBy(canvas.width/2, 0);
 		canvas.width += canvas.width/2;
 		canvas.init();
-		render.render(lines, images, canvas);
+		render.render(drawables, canvas);
 	};
 	document.getElementById("plus-right").onclick = e => {
 		canvas.width += canvas.width/2;
 		canvas.init();
-		render.render(lines, images, canvas);
+		render.render(drawables, canvas);
 	};
 	document.getElementById("plus-top").onclick = e => {
-		shiftLinesBy(lines, 0, canvas.height/2);
-		shiftImagesBy(images, 0, canvas.height/2);
+		drawables.shiftBy(0, canvas.height/2);
 		canvas.height += canvas.height/2;
 		canvas.init();
-		render.render(lines, images, canvas);
+		render.render(drawables, canvas);
 	};
 	document.getElementById("plus-bottom").onclick = e => {
 		canvas.height += canvas.height/2;
 		canvas.init();
-		render.render(lines, images, canvas);
+		render.render(drawables, canvas);
 	};
 
 	window.onresize = e => {
 		canvas.init();
-		render.render(lines, images, canvas);
+		render.render(drawables, canvas);
 	}
 
 }
