@@ -16,6 +16,9 @@ class Drawing {
 					await renderer.renderDataURL(drawable.item.point, drawable.item.dataURL);
 					break;
 				case drawable.item instanceof Line:
+					if (drawable.item.points.length == 0) {
+						continue;
+					}
 					let line = drawable.item.clone();
 					for (let i=1; i < passes; i++) {
 						let ratio = i / passes;
@@ -384,8 +387,12 @@ class Drawables {
 	}
 
 	remove() {
-		if (this.items.length > 0) {
-			this.items.pop();
+		while (this.items.length > 0) {
+			let d = this.items.pop();
+			if (d.item instanceof Line && d.item.points.length == 0) {
+				continue;
+			}
+			break;
 		}
 	}
 
@@ -521,9 +528,6 @@ async function init() {
 	const undo = document.getElementById("undo");
 	undo.onclick = e => {
 		drawables.remove();
-		if (drawables.items.length > 0) {
-			drawables.remove();
-		}
 		currentLine = new Line(Color.fromRGBString(color.value));
 		drawables.add(currentLine);
 		drawing.draw(drawables, canvas);
