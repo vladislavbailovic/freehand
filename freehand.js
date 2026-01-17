@@ -14,16 +14,15 @@ class Render {
 		if (passes < 1) passes = 1;
 
 		for (let line of lines) {
-			let dots = line.dots();
+			let dots = line.clone();
 			for (let i=1; i < passes; i++) {
 				let ratio = i / passes;
-				dots = smoothPass(dots, Math.floor(ratio * this.smoothing));
+				dots = dots.smoothPass(Math.floor(ratio * this.smoothing));
 				writer.renderLine(dots, this.stroke * ratio, line.color.toRGBA(ratio));
 			}
 		}
 		for (let line of lines) {
-			let dots = line.dots();
-			writer.renderLine(smooth(dots, this.smoothing, passes), this.stroke, line.color.toRGB());
+			writer.renderLine(line.smooth(this.smoothing, passes), this.stroke, line.color.toRGB());
 		}
 		writer.swap();
 	}
@@ -68,7 +67,7 @@ class CanvasWriter extends Writer {
 
 	renderLine(dots, stroke, color) {
 		const ctx = this.el.getContext("2d");
-		if (dots.length < 2) return;
+		if (dots.points.length < 2) return;
 
 		if (stroke < 1) stroke = 1;
 
@@ -76,12 +75,12 @@ class CanvasWriter extends Writer {
 		ctx.strokeStyle = color;
 		ctx.lineWidth = stroke;
 
-		let dot = dots[0];
+		let dot = dots.points[0];
 		ctx.beginPath();
-		for (let i = 1; i < dots.length; i++) {
-			ctx.moveTo(dot[0], dot[1]);
-			dot = dots[i];
-			ctx.lineTo(dot[0], dot[1]);
+		for (let i = 1; i < dots.points.length; i++) {
+			ctx.moveTo(dot.x, dot.y);
+			dot = dots.points[i];
+			ctx.lineTo(dot.x, dot.y);
 		}
 		ctx.closePath();
 		ctx.stroke();
@@ -113,18 +112,18 @@ class SVGWriter extends Writer {
 
 
 	renderLine(dots, stroke, color) {
-		if (dots.length < 2) return;
+		if (dots.points.length < 2) return;
 
 		const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
 
 		const d = [];
 
-		let dot = dots[0];
-		d.push(`M${dot[0]},${dot[1]}`);
-		for (let i = 1; i < dots.length; i++) {
-			d.push(`M${dot[0]},${dot[1]}`);
-			dot = dots[i];
-			d.push(`L${dot[0]},${dot[1]}`);
+		let dot = dots.points[0];
+		d.push(`M${dot.x},${dot.y}`);
+		for (let i = 1; i < dots.points.length; i++) {
+			d.push(`M${dot.x},${dot.y}`);
+			dot = dots.points[i];
+			d.push(`L${dot.x},${dot.y}`);
 		}
 
 		path.setAttribute("d", d.join(" "));
@@ -153,37 +152,6 @@ class SVGWriter extends Writer {
 
 		return new SVGWriter(svg);
 	}
-}
-
-function smooth(dots, smoothing, passes) {
-	let ret = dots;
-
-	for (let i = 0; i < passes; i++) {
-		ret = smoothPass(ret, smoothing);
-	}
-
-	return ret;
-}
-
-function smoothPass(dots, smoothing) {
-	if (smoothing < 1 || dots.length <= smoothing) return dots;
-	const ret = [];
-
-	ret.push(dots[0]);
-	for (i = smoothing / 2; i < dots.length - smoothing/2; i++) {
-		let valX = 0;
-		let valY = 0;
-		for (j = i - smoothing / 2; j < i + smoothing / 2; j++) {
-			valX += dots[j][0];
-			valY += dots[j][1];
-		}
-		ret.push([
-			valX / smoothing,
-			valY / smoothing
-		]);
-	}
-	ret.push(dots[dots.length-1]);
-	return ret;
 }
 
 function shiftLinesBy(lines, x, y) {
@@ -270,6 +238,41 @@ class Line {
 
 	dots() {
 		return this.points.map(p => [p.x, p.y]);
+	}
+
+	clone() {
+		let ret = new Line(this.color);
+		ret.points = this.points;
+		return ret;
+	}
+
+	smooth(smoothing, passes) {
+		let ret = this.clone();
+		for (let i = 0; i < passes; i++) {
+			ret = ret.smoothPass(smoothing);
+		}
+		return ret;
+	}
+
+	smoothPass(smoothing) {
+		let ret = new Line(this.color);
+		if (smoothing < 1 || this.points.length <= smoothing) return this.clone();
+
+		ret.add(this.points[0]);
+		for (let i = smoothing / 2; i < this.points.length - smoothing/2; i++) {
+			let valX = 0;
+			let valY = 0;
+			for (let j = i - smoothing / 2; j < i + smoothing / 2; j++) {
+				valX += this.points[j].x;
+				valY += this.points[j].y;
+			}
+			ret.add(new Point(
+				valX / smoothing,
+				valY / smoothing
+			));
+		}
+		ret.add(this.points[this.points.length-1]);
+		return ret;
 	}
 }
 
