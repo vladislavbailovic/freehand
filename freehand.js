@@ -1,31 +1,49 @@
 class Drawing {
-	setSmoothing(val) { this.smoothing = val; }
-	setPasses(val) { this.passes = val; }
-	setStroke(val) { this.stroke = val; }
+	setSmoothing(val) {
+		this.smoothing = val;
+	}
+	setPasses(val) {
+		this.passes = val;
+	}
+	setStroke(val) {
+		this.stroke = val;
+	}
 
 	async draw(drawables, renderer) {
-		if (!(drawables instanceof Drawables)) throw new Error("expected drawables");
+		if (!(drawables instanceof Drawables))
+			throw new Error("expected drawables");
 		if (!(renderer instanceof Renderer)) throw new Error("expected renderer");
 		renderer.reset();
 
 		let passes = this.passes;
 		if (passes < 1) passes = 1;
 		for (let drawable of drawables.items) {
-			switch(true) {
+			switch (true) {
 				case drawable.item instanceof DataImage:
-					await renderer.renderDataURL(drawable.item.point, drawable.item.dataURL);
+					await renderer.renderDataURL(
+						drawable.item.point,
+						drawable.item.dataURL,
+					);
 					break;
 				case drawable.item instanceof Line:
 					if (drawable.item.points.length == 0) {
 						continue;
 					}
 					let line = drawable.item.clone();
-					for (let i=1; i < passes; i++) {
+					for (let i = 1; i < passes; i++) {
 						let ratio = i / passes;
 						line = line.smoothPass(Math.floor(ratio * this.smoothing));
-						renderer.renderLine(line, this.stroke * ratio, line.color.toRGBA(ratio));
+						renderer.renderLine(
+							line,
+							this.stroke * ratio,
+							line.color.toRGBA(ratio),
+						);
 					}
-					renderer.renderLine(drawable.item.smooth(this.smoothing, passes), this.stroke, line.color.toRGB());
+					renderer.renderLine(
+						drawable.item.smooth(this.smoothing, passes),
+						this.stroke,
+						line.color.toRGB(),
+					);
 					break;
 				default:
 					throw new Error("invalid drawable");
@@ -37,9 +55,15 @@ class Drawing {
 }
 
 class Renderer {
-	reset() { throw new Error("implement reset"); }
-	renderLine() { throw new Error("implement renderLine"); }
-	renderDataURL() { throw new Error("implement renderDataURL"); }
+	reset() {
+		throw new Error("implement reset");
+	}
+	renderLine() {
+		throw new Error("implement renderLine");
+	}
+	renderDataURL() {
+		throw new Error("implement renderDataURL");
+	}
 	swap() {
 		// by default, no double-buffering
 	}
@@ -98,7 +122,7 @@ class CanvasRenderer extends Renderer {
 		return new Promise((resolve, reject) => {
 			if (!(pt instanceof Point)) return reject("Expected point");
 			const img = new Image();
-			img.onload = e => {
+			img.onload = (e) => {
 				let ctx = this.el.getContext("2d");
 				ctx.drawImage(img, pt.x, pt.y);
 				resolve();
@@ -115,9 +139,8 @@ class SVGRenderer extends Renderer {
 	}
 
 	reset() {
-		this.el.innerHTML = '';
+		this.el.innerHTML = "";
 	}
-
 
 	renderLine(dots, stroke, color) {
 		if (dots.points.length < 2) return;
@@ -161,7 +184,6 @@ class SVGRenderer extends Renderer {
 		return new SVGRenderer(svg);
 	}
 }
-
 
 class Color {
 	constructor(r, g, b) {
@@ -230,7 +252,7 @@ class Line {
 	}
 
 	dots() {
-		return this.points.map(p => [p.x, p.y]);
+		return this.points.map((p) => [p.x, p.y]);
 	}
 
 	clone() {
@@ -253,19 +275,16 @@ class Line {
 		if (smoothing < 1 || this.points.length <= smoothing) return this.clone();
 
 		ret.add(this.points[0]);
-		for (let i = smoothing / 2; i < this.points.length - smoothing/2; i++) {
+		for (let i = smoothing / 2; i < this.points.length - smoothing / 2; i++) {
 			let valX = 0;
 			let valY = 0;
 			for (let j = i - smoothing / 2; j < i + smoothing / 2; j++) {
 				valX += this.points[j].x;
 				valY += this.points[j].y;
 			}
-			ret.add(new Point(
-				valX / smoothing,
-				valY / smoothing
-			));
+			ret.add(new Point(valX / smoothing, valY / smoothing));
 		}
-		ret.add(this.points[this.points.length-1]);
+		ret.add(this.points[this.points.length - 1]);
 		return ret;
 	}
 }
@@ -299,12 +318,12 @@ class DataImage {
 
 	static async fromBlobAt(blob, pos) {
 		if (!(pos instanceof Point)) throw new Error("expected point");
-		const dataURL = await(new Promise((resolve, reject) => {
+		const dataURL = await new Promise((resolve, reject) => {
 			const reader = new FileReader();
 			reader.onload = () => resolve(reader.result);
 			reader.onerror = reject;
 			reader.readAsDataURL(blob);
-		}));
+		});
 		const bmp = await createImageBitmap(blob);
 		const me = new DataImage(pos, dataURL);
 		me.width = bmp.width;
@@ -317,15 +336,13 @@ class Drawable {
 	item;
 
 	constructor(item) {
-		if (
-			!(item instanceof Line) &&
-			!(item instanceof DataImage)
-		) throw new Error("Invalid drawable");
+		if (!(item instanceof Line) && !(item instanceof DataImage))
+			throw new Error("Invalid drawable");
 		this.item = item;
 	}
 
 	shiftBy(x, y) {
-		switch(true) {
+		switch (true) {
 			case this.item instanceof Line:
 				for (let i = 0; i < this.item.points.length; i++) {
 					this.item.points[i].x += x;
@@ -343,7 +360,7 @@ class Drawable {
 
 	getMinPoint() {
 		const min = new Point(Number.MAX_VALUE, Number.MAX_VALUE);
-		switch(true) {
+		switch (true) {
 			case this.item instanceof Line:
 				for (let point of this.item.points) {
 					min.x = Math.min(min.x, point.x);
@@ -362,7 +379,7 @@ class Drawable {
 
 	getMaxPoint() {
 		const max = new Point(0, 0);
-		switch(true) {
+		switch (true) {
 			case this.item instanceof Line:
 				for (let point of this.item.points) {
 					max.x = Math.max(max.x, point.x);
@@ -398,14 +415,14 @@ class Drawables {
 	}
 
 	shiftBy(x, y) {
-		for(let i = 0; i < this.items.length; i++) {
+		for (let i = 0; i < this.items.length; i++) {
 			this.items[i].shiftBy(x, y);
 		}
 	}
 
 	getLines() {
 		const ret = [];
-		for(let item of this.items) {
+		for (let item of this.items) {
 			if (item.item instanceof Line) {
 				ret.push(item.item);
 			}
@@ -415,7 +432,7 @@ class Drawables {
 
 	getImages() {
 		const ret = [];
-		for(let item of this.items) {
+		for (let item of this.items) {
 			if (item.item instanceof DataImage) {
 				ret.push(item.item);
 			}
@@ -425,7 +442,7 @@ class Drawables {
 
 	getMaxPoint() {
 		const max = new Point(0, 0);
-		for(let i = 0; i < this.items.length; i++) {
+		for (let i = 0; i < this.items.length; i++) {
 			const pt = this.items[i].getMaxPoint();
 			max.x = Math.max(max.x, pt.x);
 			max.y = Math.max(max.y, pt.y);
@@ -435,7 +452,7 @@ class Drawables {
 
 	getMinPoint() {
 		const min = new Point(Number.MAX_VALUE, Number.MAX_VALUE);
-		for(let i = 0; i < this.items.length; i++) {
+		for (let i = 0; i < this.items.length; i++) {
 			const pt = this.items[i].getMinPoint();
 			min.x = Math.min(min.x, pt.x);
 			min.y = Math.min(min.y, pt.y);
@@ -453,8 +470,8 @@ async function init() {
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
 	const stroke = document.getElementById("stroke");
-	const change = cback => {
-		return e => {
+	const change = (cback) => {
+		return (e) => {
 			cback.apply(drawing, [e.target.value]);
 			const out = e.target.parentNode.querySelector(".out");
 			out.innerText = e.target.value;
@@ -477,21 +494,21 @@ async function init() {
 	const drawables = new Drawables();
 	drawables.add(currentLine);
 
-	color.onchange = e => {
+	color.onchange = (e) => {
 		currentLine.setColor(Color.fromRGBString(color.value));
 	};
 
-	pad.onmousedown = e => {
+	pad.onmousedown = (e) => {
 		isDrawing = true;
 		lastPos = new Point(e.offsetX, e.offsetY);
 	};
-	pad.onmouseup = e => {
+	pad.onmouseup = (e) => {
 		isDrawing = false;
 
 		currentLine = new Line(Color.fromRGBString(color.value));
 		drawables.add(currentLine);
 	};
-	pad.onmousemove = e => {
+	pad.onmousemove = (e) => {
 		if (isDrawing) {
 			currentLine.add(new Point(e.offsetX, e.offsetY));
 			drawing.draw(drawables, canvas);
@@ -514,7 +531,7 @@ async function init() {
 	});
 
 	const crop = document.getElementById("crop");
-	crop.onclick = e => {
+	crop.onclick = (e) => {
 		const min = drawables.getMinPoint();
 		const max = drawables.getMaxPoint();
 		drawables.shiftBy(-1 * min.x, -1 * min.y);
@@ -527,22 +544,22 @@ async function init() {
 	};
 
 	const undo = document.getElementById("undo");
-	undo.onclick = e => {
+	undo.onclick = (e) => {
 		drawables.remove();
 		currentLine = new Line(Color.fromRGBString(color.value));
 		drawables.add(currentLine);
 		drawing.draw(drawables, canvas);
 	};
-	document.addEventListener("keydown", e => {
-		if (e.ctrlKey && e.key === 'z') {
+	document.addEventListener("keydown", (e) => {
+		if (e.ctrlKey && e.key === "z") {
 			e.preventDefault();
 			undo.click();
 		}
 	});
 
 	const dload = document.getElementById("download-svg");
-	dload.onclick = async e => {
-		const date = new Date().toISOString().replace(/[^-a-z0-9]/gi, '-');
+	dload.onclick = async (e) => {
+		const date = new Date().toISOString().replace(/[^-a-z0-9]/gi, "-");
 		const fname = `freehand-${date}.svg`;
 
 		const resp = confirm(`Download ${fname}?`);
@@ -551,9 +568,9 @@ async function init() {
 		const svg = SVGRenderer.cloneFrom(pad);
 		await drawing.draw(drawables, svg);
 
-		const dl = document.createElement('a');
+		const dl = document.createElement("a");
 		dl.href = window.URL.createObjectURL(
-			new Blob([svg.el.outerHTML], {"type": "text/svg" })
+			new Blob([svg.el.outerHTML], { type: "text/svg" }),
 		);
 		dl.download = fname;
 		document.body.appendChild(dl);
@@ -561,34 +578,33 @@ async function init() {
 		document.body.removeChild(dl);
 	};
 
-	document.getElementById("plus-left").onclick = e => {
-		drawables.shiftBy(canvas.width/2, 0);
-		canvas.width += canvas.width/2;
+	document.getElementById("plus-left").onclick = (e) => {
+		drawables.shiftBy(canvas.width / 2, 0);
+		canvas.width += canvas.width / 2;
 		canvas.init();
 		drawing.draw(drawables, canvas);
 	};
-	document.getElementById("plus-right").onclick = e => {
-		canvas.width += canvas.width/2;
+	document.getElementById("plus-right").onclick = (e) => {
+		canvas.width += canvas.width / 2;
 		canvas.init();
 		drawing.draw(drawables, canvas);
 	};
-	document.getElementById("plus-top").onclick = e => {
-		drawables.shiftBy(0, canvas.height/2);
-		canvas.height += canvas.height/2;
+	document.getElementById("plus-top").onclick = (e) => {
+		drawables.shiftBy(0, canvas.height / 2);
+		canvas.height += canvas.height / 2;
 		canvas.init();
 		drawing.draw(drawables, canvas);
 	};
-	document.getElementById("plus-bottom").onclick = e => {
-		canvas.height += canvas.height/2;
+	document.getElementById("plus-bottom").onclick = (e) => {
+		canvas.height += canvas.height / 2;
 		canvas.init();
 		drawing.draw(drawables, canvas);
 	};
 
-	window.onresize = e => {
+	window.onresize = (e) => {
 		canvas.init();
 		drawing.draw(drawables, canvas);
-	}
-
+	};
 }
 
 window.onload = init;
