@@ -581,7 +581,6 @@ async function init() {
 			cback.apply(drawing, [e.target.value]);
 			const out = e.target.parentNode.querySelector(".out");
 			out.innerText = e.target.value;
-			drawing.draw(drawables, canvas);
 		};
 	};
 	smoothing.oninput = change(drawing.setSmoothing);
@@ -617,9 +616,20 @@ async function init() {
 	pad.onmousemove = (e) => {
 		if (isDrawing) {
 			currentLine.add(new Point(e.offsetX, e.offsetY));
-			drawing.draw(drawables, canvas);
 		}
 	};
+
+	let start;
+	const draw = (ts) => {
+		if (!start) start = ts;
+		const deltaTime = ts - start;
+		window.requestAnimationFrame(draw);
+		if (deltaTime > 1000 / 25) {
+			drawing.draw(drawables, canvas);
+			start = ts;
+		}
+	};
+	window.requestAnimationFrame(draw);
 
 	document.addEventListener("paste", async (e) => {
 		const items = e.clipboardData.items;
@@ -630,7 +640,6 @@ async function init() {
 			}
 		}
 		e.preventDefault();
-		await drawing.draw(drawables, canvas);
 
 		currentLine = new Line(Color.fromRGBString(color.value));
 		drawables.add(currentLine);
@@ -645,8 +654,6 @@ async function init() {
 		canvas.width = max.x - min.x;
 		canvas.height = max.y - min.y;
 		canvas.init();
-
-		drawing.draw(drawables, canvas);
 	};
 
 	const undo = document.getElementById("undo");
@@ -654,7 +661,6 @@ async function init() {
 		drawables.remove();
 		currentLine = new Line(Color.fromRGBString(color.value));
 		drawables.add(currentLine);
-		drawing.draw(drawables, canvas);
 	};
 	document.addEventListener("keydown", (e) => {
 		if (e.ctrlKey && e.key === "z") {
@@ -688,23 +694,19 @@ async function init() {
 		drawables.shiftBy(canvas.width / 2, 0);
 		canvas.width += canvas.width / 2;
 		canvas.init();
-		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("plus-right").onclick = (e) => {
 		canvas.width += canvas.width / 2;
 		canvas.init();
-		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("plus-top").onclick = (e) => {
 		drawables.shiftBy(0, canvas.height / 2);
 		canvas.height += canvas.height / 2;
 		canvas.init();
-		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("plus-bottom").onclick = (e) => {
 		canvas.height += canvas.height / 2;
 		canvas.init();
-		drawing.draw(drawables, canvas);
 	};
 
 	const gridX = document.getElementById("grid-x");
@@ -714,12 +716,10 @@ async function init() {
 		const y = parseInt(gridY.value, 10);
 		const grid = new Grid(x, y, canvas);
 		drawing.showGrid(grid);
-		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("show-grid").onchange = (e) => {
 		if (drawing.hasGrid()) {
 			drawing.hideGrid();
-			drawing.draw(drawables, canvas);
 		} else {
 			gridShow();
 		}
@@ -729,7 +729,6 @@ async function init() {
 
 	window.onresize = (e) => {
 		canvas.init();
-		drawing.draw(drawables, canvas);
 	};
 }
 
