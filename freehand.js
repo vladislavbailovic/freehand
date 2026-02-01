@@ -109,40 +109,30 @@ class Grid {
 
 	populate(renderer) {
 		this.lines = [];
-		const baseVariance = 0.005;
-		const aspectRatio = renderer.width / renderer.height;
-
 		const gridHeight = renderer.height / (this.gridY * this.tickSize);
-		for (let row = 0; row < this.gridY * this.tickSize; row++) {
+		for (let i = 0; i < this.gridY * this.tickSize; i++) {
 			const color =
-				row % this.tickSize == 0 ? this.color.accent : this.color.normal;
-			const line = new Line(color);
-			const variations = Math.ceil(Math.random() * this.gridY + 1);
-			let baseY = row * gridHeight;
-			for (let i = 0; i < variations; i++) {
-				const x = (renderer.width / variations) * i;
-				const y =
-					baseY + Math.random() * baseVariance * aspectRatio * renderer.height;
-				line.add(new Point(x, y));
-			}
-			line.add(new Point(renderer.width, baseY));
-			this.lines.push(line);
+				i % this.tickSize == 0 ? this.color.accent : this.color.normal;
+			this.lines.push(
+				Line.between(
+					new Point(0, i * gridHeight),
+					new Point(renderer.width, i * gridHeight),
+					color,
+				),
+			);
 		}
 
 		const gridWidth = renderer.width / (this.gridX * this.tickSize);
-		for (let col = 0; col < this.gridX * this.tickSize; col++) {
+		for (let i = 0; i < this.gridX * this.tickSize; i++) {
 			const color =
-				col % this.tickSize == 0 ? this.color.accent : this.color.normal;
-			const line = new Line(color);
-			const variations = Math.ceil(Math.random() * this.gridX + 1);
-			let baseX = col * gridWidth;
-			for (let i = 0; i < variations; i++) {
-				const y = (renderer.height / variations) * i;
-				const x = baseX + Math.random() * baseVariance * renderer.width;
-				line.add(new Point(x, y));
-			}
-			line.add(new Point(baseX, renderer.height));
-			this.lines.push(line);
+				i % this.tickSize == 0 ? this.color.accent : this.color.normal;
+			this.lines.push(
+				Line.between(
+					new Point(i * gridWidth, 0),
+					new Point(i * gridWidth, renderer.height),
+					color,
+				),
+			);
 		}
 	}
 }
@@ -379,6 +369,29 @@ class Line {
 		}
 		ret.add(this.points[this.points.length - 1]);
 		return ret;
+	}
+
+	static between(a, b, color) {
+		if (!(a instanceof Point)) throw new Error("expected origin point");
+		if (!(b instanceof Point)) throw new Error("expected destination point");
+		if (!(color instanceof Color)) throw new Error("expected color");
+		const distance = Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
+		const variance = 15 / distance;
+		const variations = Math.ceil(Math.random() * (distance / 10));
+		const line = new Line(color);
+		line.add(a);
+
+		const base = distance / variations;
+		for (let i = 0; i < variations; i++) {
+			let dx = (Math.random() - 0.5) * distance * variance;
+			let dy = (Math.random() - 0.5) * distance * variance;
+			let x = a.x + ((b.x - a.x) * i) / variations;
+			let y = a.y + ((b.y - a.y) * i) / variations;
+			line.add(new Point(x + dx, y + dy));
+		}
+
+		line.add(b);
+		return line;
 	}
 }
 
