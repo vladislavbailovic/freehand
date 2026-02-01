@@ -10,27 +10,21 @@ class Drawing {
 	}
 
 	hasGrid() {
-		return (this.grid || []).length > 0;
+		return this.grid && this.grid instanceof Grid;
 	}
-	showGrid(x, y, renderer) {
-		this.grid = [];
-		this.gridX = x;
-		this.gridY = y;
-		this.populateGrid(renderer);
+	showGrid(grid) {
+		if (!(grid instanceof Grid)) {
+			throw new Error("invalid grid");
+		}
+		this.grid = grid;
 	}
 	hideGrid() {
-		this.gridX = 0;
-		this.gridY = 0;
-		this.grid = [];
+		this.grid = null;
 	}
 	drawGrid(passes, renderer) {
-		if (!this.hasGrid()) return;
+		if (!this.grid) return;
 
-		if (this.gridX <= 0 || this.gridY <= 0) {
-			throw new Error("Invalid grid size");
-		}
-
-		for (const originalLine of this.grid) {
+		for (const originalLine of this.grid.lines) {
 			let line = originalLine.clone();
 			for (let i = 1; i < passes; i++) {
 				let ratio = i / passes;
@@ -46,45 +40,6 @@ class Drawing {
 				this.stroke,
 				line.color.toRGB(),
 			);
-		}
-	}
-	populateGrid(renderer) {
-		this.grid = [];
-		const normal = Color.fromRGBString("#DDDDDD");
-		const accent = Color.fromRGBString("#CCCCCC");
-		const tickSize = 5;
-		const baseVariance = 0.005;
-		const aspectRatio = renderer.width / renderer.height;
-
-		const gridHeight = renderer.height / (this.gridY * tickSize);
-		for (let row = 0; row < this.gridY * tickSize; row++) {
-			const color = row % tickSize == 0 ? accent : normal;
-			const line = new Line(color);
-			const variations = Math.ceil(Math.random() * this.gridY + 1);
-			let baseY = row * gridHeight;
-			for (let i = 0; i < variations; i++) {
-				const x = (renderer.width / variations) * i;
-				const y =
-					baseY + Math.random() * baseVariance * aspectRatio * renderer.height;
-				line.add(new Point(x, y));
-			}
-			line.add(new Point(renderer.width, baseY));
-			this.grid.push(line);
-		}
-
-		const gridWidth = renderer.width / (this.gridX * tickSize);
-		for (let col = 0; col < this.gridX * tickSize; col++) {
-			const color = col % tickSize == 0 ? accent : normal;
-			const line = new Line(color);
-			const variations = Math.ceil(Math.random() * this.gridX + 1);
-			let baseX = col * gridWidth;
-			for (let i = 0; i < variations; i++) {
-				const y = (renderer.height / variations) * i;
-				const x = baseX + Math.random() * baseVariance * renderer.width;
-				line.add(new Point(x, y));
-			}
-			line.add(new Point(baseX, renderer.height));
-			this.grid.push(line);
 		}
 	}
 
@@ -133,6 +88,62 @@ class Drawing {
 		}
 
 		renderer.swap();
+	}
+}
+
+class Grid {
+	lines = [];
+	gridX = 0;
+	gridY = 0;
+	color = {
+		normal: Color.fromRGBString("#DDDDDD"),
+		accent: Color.fromRGBString("#BBBBBB"),
+	};
+	tickSize = 5;
+
+	constructor(x, y, renderer) {
+		this.gridX = x;
+		this.gridY = y;
+		this.populate(renderer);
+	}
+
+	populate(renderer) {
+		this.lines = [];
+		const baseVariance = 0.005;
+		const aspectRatio = renderer.width / renderer.height;
+
+		const gridHeight = renderer.height / (this.gridY * this.tickSize);
+		for (let row = 0; row < this.gridY * this.tickSize; row++) {
+			const color =
+				row % this.tickSize == 0 ? this.color.accent : this.color.normal;
+			const line = new Line(color);
+			const variations = Math.ceil(Math.random() * this.gridY + 1);
+			let baseY = row * gridHeight;
+			for (let i = 0; i < variations; i++) {
+				const x = (renderer.width / variations) * i;
+				const y =
+					baseY + Math.random() * baseVariance * aspectRatio * renderer.height;
+				line.add(new Point(x, y));
+			}
+			line.add(new Point(renderer.width, baseY));
+			this.lines.push(line);
+		}
+
+		const gridWidth = renderer.width / (this.gridX * this.tickSize);
+		for (let col = 0; col < this.gridX * this.tickSize; col++) {
+			const color =
+				col % this.tickSize == 0 ? this.color.accent : this.color.normal;
+			const line = new Line(color);
+			const variations = Math.ceil(Math.random() * this.gridX + 1);
+			let baseX = col * gridWidth;
+			for (let i = 0; i < variations; i++) {
+				const y = (renderer.height / variations) * i;
+				const x = baseX + Math.random() * baseVariance * renderer.width;
+				line.add(new Point(x, y));
+			}
+			line.add(new Point(baseX, renderer.height));
+			this.lines.push(line);
+		}
 	}
 }
 
@@ -688,7 +699,8 @@ async function init() {
 	const gridShow = () => {
 		const x = parseInt(gridX.value, 10);
 		const y = parseInt(gridY.value, 10);
-		drawing.showGrid(x, y, canvas);
+		const grid = new Grid(x, y, canvas);
+		drawing.showGrid(grid);
 		drawing.draw(drawables, canvas);
 	};
 	document.getElementById("show-grid").onchange = (e) => {
