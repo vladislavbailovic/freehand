@@ -13,9 +13,8 @@ body {
 	width: 100vw;
 	overflow: auto;
 	scrollbar-gutter: stable;
-}
-#drawing {
 	background-color: blanchedalmond;
+	position: relative;
 }
 #toolbox {
 	position: absolute;
@@ -24,6 +23,7 @@ body {
 	transform: translate(-50%);
 	display: flex;
 	align-items: anchor-center;
+	z-index: 99;
 }
 #toolbox > * {
 	margin-left: 1em;

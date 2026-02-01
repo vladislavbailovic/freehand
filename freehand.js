@@ -9,22 +9,11 @@ class Drawing {
 		this.stroke = val;
 	}
 
-	hasGrid() {
-		return this.grid && this.grid instanceof Grid;
-	}
-	showGrid(grid) {
-		if (!(grid instanceof Grid)) {
-			throw new Error("invalid grid");
-		}
-		this.grid = grid;
-	}
-	hideGrid() {
-		this.grid = null;
-	}
-	drawGrid(passes, renderer) {
-		if (!this.grid) return;
+	drawGrid(grid, renderer) {
+		let passes = this.passes;
+		if (passes < 1) passes = 1;
 
-		for (const originalLine of this.grid.lines) {
+		for (const originalLine of grid.lines) {
 			let line = originalLine.clone();
 			for (let i = 1; i < passes; i++) {
 				let ratio = i / passes;
@@ -41,6 +30,7 @@ class Drawing {
 				line.color.toRGB(),
 			);
 		}
+		renderer.swap();
 	}
 
 	async draw(drawables, renderer) {
@@ -51,8 +41,6 @@ class Drawing {
 
 		let passes = this.passes;
 		if (passes < 1) passes = 1;
-
-		this.drawGrid(passes, renderer);
 
 		for (let drawable of drawables.items) {
 			switch (true) {
@@ -567,11 +555,33 @@ class Drawables {
 	}
 }
 
+function addBackgroundRenderer(fg) {
+	const bg = document.createElement("canvas");
+	const rect = fg.getBoundingClientRect();
+	const parentRect = fg.offsetParent.getBoundingClientRect();
+	bg.width = fg.width;
+	bg.height = fg.height;
+	fg.style.zIndex = 1;
+	fg.style.position = "absolute";
+	Object.assign(bg.style, {
+		position: "absolute",
+		left: `${rect.left - parentRect.left}px`,
+		top: `${rect.top - parentRect.top}px`,
+		zIndex: (parseInt(getComputedStyle(fg).zIndex) || 0) - 1,
+		pointerEvents: "none",
+	});
+	fg.parentElement.appendChild(bg);
+
+	return new CanvasRenderer(bg, fg.width, fg.height);
+}
+
 async function init() {
 	const box = document.body.getBoundingClientRect();
 	const pad = document.getElementById("drawing");
 	const canvas = new CanvasRenderer(pad, box.width, box.height);
 	const drawing = new Drawing();
+
+	const background = addBackgroundRenderer(pad);
 
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
@@ -645,15 +655,21 @@ async function init() {
 		drawables.add(currentLine);
 	});
 
+	const resizeDrawingArea = (w, h) => {
+		canvas.width = w;
+		canvas.height = h;
+		canvas.init();
+		document.dispatchEvent(
+			new CustomEvent("canvas:resized", { detail: { w, h } }),
+		);
+	};
+
 	const crop = document.getElementById("crop");
 	crop.onclick = (e) => {
 		const min = drawables.getMinPoint();
 		const max = drawables.getMaxPoint();
 		drawables.shiftBy(-1 * min.x, -1 * min.y);
-
-		canvas.width = max.x - min.x;
-		canvas.height = max.y - min.y;
-		canvas.init();
+		resizeDrawingArea(max.x - min.x, max.y - min.y);
 	};
 
 	const undo = document.getElementById("undo");
@@ -692,40 +708,47 @@ async function init() {
 
 	document.getElementById("plus-left").onclick = (e) => {
 		drawables.shiftBy(canvas.width / 2, 0);
-		canvas.width += canvas.width / 2;
-		canvas.init();
+		resizeDrawingArea(canvas.width + canvas.width / 2, canvas.height);
 	};
 	document.getElementById("plus-right").onclick = (e) => {
-		canvas.width += canvas.width / 2;
-		canvas.init();
+		resizeDrawingArea(canvas.width + canvas.width / 2, canvas.height);
 	};
 	document.getElementById("plus-top").onclick = (e) => {
 		drawables.shiftBy(0, canvas.height / 2);
-		canvas.height += canvas.height / 2;
-		canvas.init();
+		resizeDrawingArea(canvas.width, canvas.height + canvas.height / 2);
 	};
 	document.getElementById("plus-bottom").onclick = (e) => {
-		canvas.height += canvas.height / 2;
-		canvas.init();
+		resizeDrawingArea(canvas.width, canvas.height + canvas.height / 2);
 	};
 
 	const gridX = document.getElementById("grid-x");
 	const gridY = document.getElementById("grid-y");
-	const gridShow = () => {
+	const gridShow = document.getElementById("show-grid");
+	const renderGrid = () => {
 		const x = parseInt(gridX.value, 10);
 		const y = parseInt(gridY.value, 10);
 		const grid = new Grid(x, y, canvas);
-		drawing.showGrid(grid);
+		drawing.drawGrid(grid, background);
+		gridShow.checked = true;
 	};
-	document.getElementById("show-grid").onchange = (e) => {
-		if (drawing.hasGrid()) {
-			drawing.hideGrid();
+	gridShow.onchange = (e) => {
+		if (e.target.checked) {
+			renderGrid();
 		} else {
-			gridShow();
+			background.reset();
+			background.swap();
 		}
 	};
-	gridX.onchange = gridShow;
-	gridY.onchange = gridShow;
+	gridX.onchange = renderGrid;
+	gridY.onchange = renderGrid;
+	document.addEventListener("canvas:resized", (e) => {
+		background.width = e.detail.w;
+		background.height = e.detail.h;
+		background.init();
+		if (gridShow.checked) {
+			renderGrid();
+		}
+	});
 
 	window.onresize = (e) => {
 		canvas.init();
