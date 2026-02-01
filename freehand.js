@@ -9,6 +9,85 @@ class Drawing {
 		this.stroke = val;
 	}
 
+	hasGrid() {
+		return (this.grid || []).length > 0;
+	}
+	showGrid(x, y, renderer) {
+		this.grid = [];
+		this.gridX = x;
+		this.gridY = y;
+		this.populateGrid(renderer);
+	}
+	hideGrid() {
+		this.gridX = 0;
+		this.gridY = 0;
+		this.grid = [];
+	}
+	drawGrid(passes, renderer) {
+		if (!this.hasGrid()) return;
+
+		if (this.gridX <= 0 || this.gridY <= 0) {
+			throw new Error("Invalid grid size");
+		}
+
+		for (const originalLine of this.grid) {
+			let line = originalLine.clone();
+			for (let i = 1; i < passes; i++) {
+				let ratio = i / passes;
+				line = line.smoothPass(Math.floor(ratio * this.smoothing));
+				renderer.renderLine(
+					line,
+					this.stroke * ratio,
+					line.color.toRGBA(ratio),
+				);
+			}
+			renderer.renderLine(
+				originalLine.smooth(this.smoothing, passes),
+				this.stroke,
+				line.color.toRGB(),
+			);
+		}
+	}
+	populateGrid(renderer) {
+		this.grid = [];
+		const normal = Color.fromRGBString("#DDDDDD");
+		const accent = Color.fromRGBString("#CCCCCC");
+		const tickSize = 5;
+		const baseVariance = 0.005;
+		const aspectRatio = renderer.width / renderer.height;
+
+		const gridHeight = renderer.height / (this.gridY * tickSize);
+		for (let row = 0; row < this.gridY * tickSize; row++) {
+			const color = row % tickSize == 0 ? accent : normal;
+			const line = new Line(color);
+			const variations = Math.ceil(Math.random() * this.gridY + 1);
+			let baseY = row * gridHeight;
+			for (let i = 0; i < variations; i++) {
+				const x = (renderer.width / variations) * i;
+				const y =
+					baseY + Math.random() * baseVariance * aspectRatio * renderer.height;
+				line.add(new Point(x, y));
+			}
+			line.add(new Point(renderer.width, baseY));
+			this.grid.push(line);
+		}
+
+		const gridWidth = renderer.width / (this.gridX * tickSize);
+		for (let col = 0; col < this.gridX * tickSize; col++) {
+			const color = col % tickSize == 0 ? accent : normal;
+			const line = new Line(color);
+			const variations = Math.ceil(Math.random() * this.gridX + 1);
+			let baseX = col * gridWidth;
+			for (let i = 0; i < variations; i++) {
+				const y = (renderer.height / variations) * i;
+				const x = baseX + Math.random() * baseVariance * renderer.width;
+				line.add(new Point(x, y));
+			}
+			line.add(new Point(baseX, renderer.height));
+			this.grid.push(line);
+		}
+	}
+
 	async draw(drawables, renderer) {
 		if (!(drawables instanceof Drawables))
 			throw new Error("expected drawables");
@@ -17,6 +96,9 @@ class Drawing {
 
 		let passes = this.passes;
 		if (passes < 1) passes = 1;
+
+		this.drawGrid(passes, renderer);
+
 		for (let drawable of drawables.items) {
 			switch (true) {
 				case drawable.item instanceof DataImage:
@@ -600,6 +682,25 @@ async function init() {
 		canvas.init();
 		drawing.draw(drawables, canvas);
 	};
+
+	const gridX = document.getElementById("grid-x");
+	const gridY = document.getElementById("grid-y");
+	const gridShow = () => {
+		const x = parseInt(gridX.value, 10);
+		const y = parseInt(gridY.value, 10);
+		drawing.showGrid(x, y, canvas);
+		drawing.draw(drawables, canvas);
+	};
+	document.getElementById("show-grid").onchange = (e) => {
+		if (drawing.hasGrid()) {
+			drawing.hideGrid();
+			drawing.draw(drawables, canvas);
+		} else {
+			gridShow();
+		}
+	};
+	gridX.onchange = gridShow;
+	gridY.onchange = gridShow;
 
 	window.onresize = (e) => {
 		canvas.init();

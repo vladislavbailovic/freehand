@@ -68,6 +68,10 @@ label span.out {
 	bottom: 0;
 	transform: translate(-50%);
 }
+
+#toolbox .grid-size input {
+	width: 4em;
+}
 </style>
 	</head>
 	<body>
@@ -104,6 +108,18 @@ label span.out {
 				<button id="plus-top">+</button>
 				<button id="plus-right">+</button>
 				<button id="plus-bottom">+</button>
+			</div>
+
+			<div class="grid">
+				<div class="grid-size">
+					<input type="number" id="grid-x" value="30" />
+					x
+					<input type="number" id="grid-y" value="10" />
+				</div>
+				<label>
+					<input type="checkbox" id="show-grid" />
+					Show grid
+				</label>
 			</div>
 		</div>
 	</body>
