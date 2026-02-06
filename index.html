@@ -16,6 +16,49 @@ body {
 	background-color: blanchedalmond;
 	position: relative;
 }
+#sidebar {
+	position: absolute;
+	left: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	z-index: 99;
+	display: flex;
+	flex-direction: column;
+}
+#sidebar .layers {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+#sidebar .layers label,
+#sidebar .layers button {
+	display: block;
+}
+#sidebar .layers button span {
+	font-size: 0;
+}
+#sidebar .layers button#add-layer span:before {
+	content: "+";
+	font-size: large;
+}
+#sidebar .layers button#remove-layer span:before {
+	content: "-";
+	font-size: large;
+}
+#sidebar .layers label.current {
+	writing-mode: vertical-lr;
+	direction: rtl;
+	margin-left: 1em;
+}
+#sidebar .layers label.current span {
+	display: block;
+	position: absolute;
+	direction: ltr;
+	writing-mode: horizontal-tb;
+}
+#sidebar .layers label.hide span {
+	display: inline;
+}
 #toolbox {
 	position: absolute;
 	bottom: 1em;
@@ -119,6 +162,21 @@ label span.out {
 				<label>
 					<input type="checkbox" id="show-grid" />
 					Show grid
+				</label>
+			</div>
+		</div>
+
+		<div id="sidebar">
+			<div class="layers">
+				<button id="add-layer"><span>Add new</span></button>
+				<label class="current">
+					<input type="range" min=1 max=2 id="current-layer" />
+					<span>1</span>
+				</label>
+				<button id="remove-layer" disabled><span>Remove current</span></button>
+				<label class="hide">
+					<input type="checkbox" id="hide-current-layer" />
+					<span>Hide</span>
 				</label>
 			</div>
 		</div>
