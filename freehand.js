@@ -9,30 +9,6 @@ class Drawing {
 		this.stroke = val;
 	}
 
-	drawGrid(grid, renderer) {
-		let passes = this.passes;
-		if (passes < 1) passes = 1;
-
-		for (const originalLine of grid.lines) {
-			let line = originalLine.clone();
-			for (let i = 1; i < passes; i++) {
-				let ratio = i / passes;
-				line = line.smoothPass(Math.floor(ratio * this.smoothing));
-				renderer.renderLine(
-					line,
-					this.stroke * ratio,
-					line.color.toRGBA(ratio),
-				);
-			}
-			renderer.renderLine(
-				originalLine.smooth(this.smoothing, passes),
-				this.stroke,
-				line.color.toRGB(),
-			);
-		}
-		renderer.swap();
-	}
-
 	async draw(drawables, renderer) {
 		if (!(drawables instanceof Drawables))
 			throw new Error("expected drawables");
@@ -122,6 +98,14 @@ class Grid {
 				),
 			);
 		}
+	}
+
+	drawables() {
+		const drawables = new Drawables();
+		for (let line of this.lines) {
+			drawables.add(line);
+		}
+		return drawables;
 	}
 }
 
@@ -728,7 +712,7 @@ async function init() {
 		const x = parseInt(gridX.value, 10);
 		const y = parseInt(gridY.value, 10);
 		const grid = new Grid(x, y, canvas);
-		drawing.drawGrid(grid, background);
+		drawing.draw(grid.drawables(), background);
 		gridShow.checked = true;
 	};
 	gridShow.onchange = (e) => {
