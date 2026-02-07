@@ -9,10 +9,10 @@ class Drawing {
 		this.stroke = val;
 	}
 
-	async draw(drawables, renderer) {
-		if (!(drawables instanceof Drawables))
-			throw new Error("expected drawables");
-		if (!(renderer instanceof Renderer)) throw new Error("expected renderer");
+	async draw(layer) {
+		if (!(layer instanceof Layer)) throw new Error("expected layer");
+		const drawables = layer.drawables;
+		const renderer = layer.renderer;
 		renderer.reset();
 
 		let passes = this.passes;
@@ -589,8 +589,7 @@ class LayerStack {
 	}
 
 	getBackground() {
-		// TODO: this is weird
-		return this.stack[0].renderer;
+		return this.stack[0];
 	}
 
 	getCurrent() {
@@ -631,7 +630,7 @@ class Layer {
 async function init() {
 	const layers = new LayerStack("drawing");
 	const background = layers.getBackground();
-	let { renderer: canvas, drawables } = layers.getCurrent();
+	let currentLayer = layers.getCurrent();
 	const drawing = new Drawing();
 
 	const smoothing = document.getElementById("smoothing");
@@ -657,7 +656,7 @@ async function init() {
 	let isDrawing = false;
 	let currentLine = new Line(Color.fromRGBString(color.value));
 	let lastPos = new Point(0, 0);
-	drawables.add(currentLine);
+	currentLayer.drawables.add(currentLine);
 
 	color.onchange = (e) => {
 		currentLine.setColor(Color.fromRGBString(color.value));
@@ -671,7 +670,7 @@ async function init() {
 		isDrawing = false;
 
 		currentLine = new Line(Color.fromRGBString(color.value));
-		drawables.add(currentLine);
+		currentLayer.drawables.add(currentLine);
 	};
 	layers.root.onmousemove = (e) => {
 		if (isDrawing) {
@@ -685,7 +684,7 @@ async function init() {
 		const deltaTime = ts - start;
 		window.requestAnimationFrame(draw);
 		if (deltaTime > 1000 / 25) {
-			drawing.draw(drawables, canvas);
+			drawing.draw(currentLayer);
 			start = ts;
 		}
 	};
@@ -696,13 +695,13 @@ async function init() {
 		for (let item of items) {
 			if (item.type === "image/png") {
 				const blob = item.getAsFile();
-				drawables.add(await DataImage.fromBlobAt(blob, lastPos));
+				currentLayer.drawables.add(await DataImage.fromBlobAt(blob, lastPos));
 			}
 		}
 		e.preventDefault();
 
 		currentLine = new Line(Color.fromRGBString(color.value));
-		drawables.add(currentLine);
+		currentLayer.drawables.add(currentLine);
 	});
 
 	const resizeDrawingArea = (w, h) => {
@@ -716,17 +715,17 @@ async function init() {
 
 	const crop = document.getElementById("crop");
 	crop.onclick = (e) => {
-		const min = drawables.getMinPoint();
-		const max = drawables.getMaxPoint();
-		drawables.shiftBy(-1 * min.x, -1 * min.y);
+		const min = currentLayer.drawables.getMinPoint();
+		const max = currentLayer.drawables.getMaxPoint();
+		currentLayer.drawables.shiftBy(-1 * min.x, -1 * min.y);
 		resizeDrawingArea(max.x - min.x, max.y - min.y);
 	};
 
 	const undo = document.getElementById("undo");
 	undo.onclick = (e) => {
-		drawables.remove();
+		currentLayer.drawables.remove();
 		currentLine = new Line(Color.fromRGBString(color.value));
-		drawables.add(currentLine);
+		currentLayer.drawables.add(currentLine);
 	};
 	document.addEventListener("keydown", (e) => {
 		if (e.ctrlKey && e.key === "z") {
@@ -757,14 +756,14 @@ async function init() {
 	};
 
 	document.getElementById("plus-left").onclick = (e) => {
-		drawables.shiftBy(canvas.width / 2, 0);
+		currentLayer.drawables.shiftBy(canvas.width / 2, 0);
 		resizeDrawingArea(canvas.width + canvas.width / 2, canvas.height);
 	};
 	document.getElementById("plus-right").onclick = (e) => {
 		resizeDrawingArea(canvas.width + canvas.width / 2, canvas.height);
 	};
 	document.getElementById("plus-top").onclick = (e) => {
-		drawables.shiftBy(0, canvas.height / 2);
+		currentLayer.drawables.shiftBy(0, canvas.height / 2);
 		resizeDrawingArea(canvas.width, canvas.height + canvas.height / 2);
 	};
 	document.getElementById("plus-bottom").onclick = (e) => {
@@ -777,16 +776,17 @@ async function init() {
 	const renderGrid = () => {
 		const x = parseInt(gridX.value, 10);
 		const y = parseInt(gridY.value, 10);
-		const grid = new Grid(x, y, canvas);
-		drawing.draw(grid.drawables(), background);
+		const grid = new Grid(x, y, currentLayer.renderer);
+		background.drawables = grid.drawables();
+		drawing.draw(background);
 		gridShow.checked = true;
 	};
 	gridShow.onchange = (e) => {
 		if (e.target.checked) {
 			renderGrid();
 		} else {
-			background.reset();
-			background.swap();
+			background.renderer.reset();
+			background.renderer.swap();
 		}
 	};
 	gridX.onchange = renderGrid;
