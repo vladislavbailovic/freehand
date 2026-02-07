@@ -48,7 +48,6 @@ body {
 #sidebar .layers label.current {
 	writing-mode: vertical-lr;
 	direction: rtl;
-	margin-left: 1em;
 }
 #sidebar .layers label.current span {
 	display: block;
@@ -71,14 +70,14 @@ body {
 #toolbox > * {
 	margin-left: 1em;
 }
-label {
+#toolbox label {
 	margin-right: 1em;
 }
-label span {
+#toolbox label span {
 	display: block;
 	margin-top: -1em;
 }
-label span.out {
+#toolbox label span.out {
 	display: inline;
 }
 
@@ -170,7 +169,7 @@ label span.out {
 			<div class="layers">
 				<button id="add-layer"><span>Add new</span></button>
 				<label class="current">
-					<input type="range" min=1 max=2 id="current-layer" />
+					<input type="range" min=1 max=1 id="current-layer" />
 					<span>1</span>
 				</label>
 				<button id="remove-layer" disabled><span>Remove current</span></button>

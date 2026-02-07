@@ -539,33 +539,100 @@ class Drawables {
 	}
 }
 
-function addBackgroundRenderer(fg) {
-	const bg = document.createElement("canvas");
-	const rect = fg.getBoundingClientRect();
-	const parentRect = fg.offsetParent.getBoundingClientRect();
-	bg.width = fg.width;
-	bg.height = fg.height;
-	fg.style.zIndex = 1;
-	fg.style.position = "absolute";
-	Object.assign(bg.style, {
-		position: "absolute",
-		left: `${rect.left - parentRect.left}px`,
-		top: `${rect.top - parentRect.top}px`,
-		zIndex: (parseInt(getComputedStyle(fg).zIndex) || 0) - 1,
-		pointerEvents: "none",
-	});
-	fg.parentElement.appendChild(bg);
+class LayerStack {
+	stack = [];
+	current = 0;
 
-	return new CanvasRenderer(bg, fg.width, fg.height);
+	constructor(rootId) {
+		this.root = document.getElementById(rootId);
+		this.dimensions = this.root.offsetParent.getBoundingClientRect();
+		this.root.width = this.dimensions.width;
+		this.root.height = this.dimensions.height;
+
+		this.stack.push(new Layer(this.createCanvasRenderer())); // background
+		this.stack.push(new Layer(this.createCanvasRenderer())); // layer 1
+		this.reorderLayers();
+
+		this.current = 1;
+	}
+
+	createCanvasRenderer() {
+		const elem = document.createElement("canvas");
+		const rect = this.root.getBoundingClientRect();
+		const parentRect = this.dimensions;
+		elem.width = this.root.width;
+		elem.height = this.root.height;
+		this.root.style.position = "absolute";
+		Object.assign(elem.style, {
+			position: "absolute",
+			left: `${rect.left - parentRect.left}px`,
+			top: `${rect.top - parentRect.top}px`,
+			pointerEvents: "none",
+		});
+		this.root.parentElement.appendChild(elem);
+
+		return new CanvasRenderer(elem, parentRect.width, parentRect.height);
+	}
+
+	reorderLayers() {
+		for (let idx in this.stack) {
+			// TODO: wat
+			this.stack[idx].renderer.el.style.zIndex = idx;
+			this.stack[idx].renderer.buffer.style.zIndex = idx;
+		}
+	}
+
+	addLayer() {
+		this.stack.push(new Layer(this.createCanvasRenderer()));
+		this.current = this.stack.length - 1;
+		this.reorderLayers();
+	}
+
+	getBackground() {
+		// TODO: this is weird
+		return this.stack[0].renderer;
+	}
+
+	getCurrent() {
+		this.root.parentElement.querySelectorAll("canvas").forEach((el) => {
+			el.removeAttribute("current-layer");
+		});
+		const layer = this.stack[this.current];
+		// TODO: wat
+		layer.renderer.el.setAttribute("current-layer", this.current);
+		layer.renderer.buffer.setAttribute("current-layer", this.current);
+
+		return layer;
+	}
+
+	removeCurrent() {
+		if (this.stack.length < 3) return false;
+		const [layer] = this.stack.splice(this.current, 1);
+		// TODO: wat
+		layer.renderer.el.remove();
+		layer.renderer.buffer.remove();
+		return this.selectLayer(this.stack.length - 1);
+	}
+
+	selectLayer(idx) {
+		if (idx > this.stack.length) throw new Error(`invalid layer ${idx}`);
+		this.current = idx;
+		return this.getCurrent();
+	}
+}
+
+class Layer {
+	constructor(renderer) {
+		this.renderer = renderer;
+		this.drawables = new Drawables();
+	}
 }
 
 async function init() {
-	const box = document.body.getBoundingClientRect();
-	const pad = document.getElementById("drawing");
-	const canvas = new CanvasRenderer(pad, box.width, box.height);
+	const layers = new LayerStack("drawing");
+	const background = layers.getBackground();
+	let { renderer: canvas, drawables } = layers.getCurrent();
 	const drawing = new Drawing();
-
-	const background = addBackgroundRenderer(pad);
 
 	const smoothing = document.getElementById("smoothing");
 	const passes = document.getElementById("passes");
@@ -590,24 +657,23 @@ async function init() {
 	let isDrawing = false;
 	let currentLine = new Line(Color.fromRGBString(color.value));
 	let lastPos = new Point(0, 0);
-	const drawables = new Drawables();
 	drawables.add(currentLine);
 
 	color.onchange = (e) => {
 		currentLine.setColor(Color.fromRGBString(color.value));
 	};
 
-	pad.onmousedown = (e) => {
+	layers.root.onmousedown = (e) => {
 		isDrawing = true;
 		lastPos = new Point(e.offsetX, e.offsetY);
 	};
-	pad.onmouseup = (e) => {
+	layers.root.onmouseup = (e) => {
 		isDrawing = false;
 
 		currentLine = new Line(Color.fromRGBString(color.value));
 		drawables.add(currentLine);
 	};
-	pad.onmousemove = (e) => {
+	layers.root.onmousemove = (e) => {
 		if (isDrawing) {
 			currentLine.add(new Point(e.offsetX, e.offsetY));
 		}
@@ -737,6 +803,56 @@ async function init() {
 	window.onresize = (e) => {
 		canvas.init();
 	};
+
+	// Layers
+	{
+		const layerSelectionCtl = document.getElementById("current-layer");
+		const currentLayerOut = layerSelectionCtl.parentNode.querySelector("span");
+		const layerToggler = document.getElementById("hide-current-layer");
+		const removeLayerCtl = document.getElementById("remove-layer");
+
+		layerSelectionCtl.onchange = (e) => {
+			layers.selectLayer(e.target.value);
+			updateLayerSelection();
+		};
+
+		const updateLayerSelection = () => {
+			canvas = layers.getCurrent().renderer;
+			drawables = layers.getCurrent().drawables;
+
+			layerSelectionCtl.max = layers.stack.length - 1;
+			layerSelectionCtl.value = layers.current;
+			currentLayerOut.innerText = layers.current;
+			updateLayerTogglerState();
+		};
+		const updateLayerTogglerState = () => {
+			layerToggler.checked = canvas.el.style.display === "none";
+			removeLayerCtl.disabled = layers.stack.length <= 2;
+		};
+
+		document.getElementById("add-layer").onclick = (e) => {
+			currentLine = new Line(Color.fromRGBString(color.value));
+			layers.addLayer();
+			updateLayerSelection();
+		};
+		removeLayerCtl.onclick = (e) => {
+			currentLine = new Line(Color.fromRGBString(color.value));
+			layers.removeCurrent();
+			updateLayerSelection();
+		};
+
+		layerToggler.onchange = (e) => {
+			if (layerToggler.checked) {
+				// TODO: wat
+				canvas.el.style.display = "none";
+				canvas.buffer.style.display = "none";
+			} else {
+				canvas.el.style.display = "block";
+				canvas.buffer.style.display = "block";
+			}
+			updateLayerTogglerState();
+		};
+	}
 }
 
 window.onload = init;
