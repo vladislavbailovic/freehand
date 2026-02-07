@@ -1,60 +1,3 @@
-class Drawing {
-	setSmoothing(val) {
-		this.smoothing = val;
-	}
-	setPasses(val) {
-		this.passes = val;
-	}
-	setStroke(val) {
-		this.stroke = val;
-	}
-
-	async draw(layer) {
-		if (!(layer instanceof Layer)) throw new Error("expected layer");
-		const drawables = layer.drawables;
-		const renderer = layer.renderer;
-		renderer.reset();
-
-		let passes = this.passes;
-		if (passes < 1) passes = 1;
-
-		for (let drawable of drawables.items) {
-			switch (true) {
-				case drawable.item instanceof DataImage:
-					await renderer.renderDataURL(
-						drawable.item.point,
-						drawable.item.dataURL,
-					);
-					break;
-				case drawable.item instanceof Line:
-					if (drawable.item.points.length == 0) {
-						continue;
-					}
-					let line = drawable.item.clone();
-					for (let i = 1; i < passes; i++) {
-						let ratio = i / passes;
-						line = line.smoothPass(Math.floor(ratio * this.smoothing));
-						renderer.renderLine(
-							line,
-							this.stroke * ratio,
-							line.color.toRGBA(ratio),
-						);
-					}
-					renderer.renderLine(
-						drawable.item.smooth(this.smoothing, passes),
-						this.stroke,
-						line.color.toRGB(),
-					);
-					break;
-				default:
-					throw new Error("invalid drawable");
-			}
-		}
-
-		renderer.swap();
-	}
-}
-
 class Grid {
 	lines = [];
 	gridX = 0;
@@ -621,36 +564,115 @@ class LayerStack {
 }
 
 class Layer {
+	passes = 5;
+	smoothing = 10;
+	stroke = 1;
+
 	constructor(renderer) {
 		this.renderer = renderer;
 		this.drawables = new Drawables();
 	}
+
+	async draw() {
+		const drawables = this.drawables;
+		const renderer = this.renderer;
+		renderer.reset();
+
+		let passes = this.passes;
+		if (passes < 1) passes = 1;
+
+		for (let drawable of drawables.items) {
+			switch (true) {
+				case drawable.item instanceof DataImage:
+					await renderer.renderDataURL(
+						drawable.item.point,
+						drawable.item.dataURL,
+					);
+					break;
+				case drawable.item instanceof Line:
+					if (drawable.item.points.length == 0) {
+						continue;
+					}
+					let line = drawable.item.clone();
+					for (let i = 1; i < passes; i++) {
+						let ratio = i / passes;
+						line = line.smoothPass(Math.floor(ratio * this.smoothing));
+						renderer.renderLine(
+							line,
+							this.stroke * ratio,
+							line.color.toRGBA(ratio),
+						);
+					}
+					renderer.renderLine(
+						drawable.item.smooth(this.smoothing, passes),
+						this.stroke,
+						line.color.toRGB(),
+					);
+					break;
+				default:
+					throw new Error("invalid drawable");
+			}
+		}
+
+		renderer.swap();
+	}
 }
+
+class Event {
+	constructor(type) {
+		this.type = type;
+	}
+	listen(cback) {
+		document.addEventListener(this.type, (e) => {
+			cback(e.detail || {});
+		});
+	}
+	dispatch(data) {
+		document.dispatchEvent(new CustomEvent(this.type, { detail: data }));
+	}
+}
+
+const Events = Object.freeze({
+	EVENT_CANVAS_RESIZED: new Event("canvas:resize"),
+	EVENT_LAYER_SELECTED: new Event("layer:selected"),
+});
 
 async function init() {
 	const layers = new LayerStack("drawing");
 	const background = layers.getBackground();
 	let currentLayer = layers.getCurrent();
-	const drawing = new Drawing();
 
-	const smoothing = document.getElementById("smoothing");
-	const passes = document.getElementById("passes");
-	const stroke = document.getElementById("stroke");
+	const smoothCtl = document.getElementById("smoothing");
+	const passesCtl = document.getElementById("passes");
+	const strokeCtl = document.getElementById("stroke");
+	const updateParameter = (el) => (value) => {
+		el.value = value;
+		const out = el.parentNode.querySelector(".out");
+		out.innerText = value;
+	};
 	const change = (cback) => {
 		return (e) => {
-			cback.apply(drawing, [e.target.value]);
-			const out = e.target.parentNode.querySelector(".out");
-			out.innerText = e.target.value;
+			cback.apply(currentLayer, [e.target.value]);
+			updateParameter(e.target)(e.target.value);
 		};
 	};
-	smoothing.oninput = change(drawing.setSmoothing);
-	drawing.setSmoothing(smoothing.value || 1);
+	smoothCtl.oninput = change((x) => (currentLayer.smoothing = x));
+	currentLayer.smoothing = smoothCtl.value || 1;
+	Events.EVENT_LAYER_SELECTED.listen(({ smoothing }) =>
+		updateParameter(smoothCtl)(smoothing),
+	);
 
-	passes.oninput = change(drawing.setPasses);
-	drawing.setPasses(passes.value || 1);
+	passesCtl.oninput = change((x) => (currentLayer.passes = x));
+	currentLayer.passes = passesCtl.value || 1;
+	Events.EVENT_LAYER_SELECTED.listen(({ passes }) =>
+		updateParameter(passesCtl)(passes),
+	);
 
-	stroke.oninput = change(drawing.setStroke);
-	drawing.setStroke(stroke.value || 1);
+	strokeCtl.oninput = change((x) => (currentLayer.stroke = x));
+	currentLayer.stroke = strokeCtl.value || 1;
+	Events.EVENT_LAYER_SELECTED.listen(({ stroke }) =>
+		updateParameter(strokeCtl)(stroke),
+	);
 
 	let color = document.getElementById("foreground");
 	let isDrawing = false;
@@ -684,7 +706,7 @@ async function init() {
 		const deltaTime = ts - start;
 		window.requestAnimationFrame(draw);
 		if (deltaTime > 1000 / 25) {
-			drawing.draw(currentLayer);
+			currentLayer.draw();
 			start = ts;
 		}
 	};
@@ -705,12 +727,10 @@ async function init() {
 	});
 
 	const resizeDrawingArea = (w, h) => {
-		canvas.width = w;
-		canvas.height = h;
-		canvas.init();
-		document.dispatchEvent(
-			new CustomEvent("canvas:resized", { detail: { w, h } }),
-		);
+		currentLayer.renderer.width = w;
+		currentLayer.renderer.height = h;
+		currentLayer.renderer.init();
+		Events.EVENT_CANVAS_RESIZED.dispatch({ w, h });
 	};
 
 	const crop = document.getElementById("crop");
@@ -778,7 +798,7 @@ async function init() {
 		const y = parseInt(gridY.value, 10);
 		const grid = new Grid(x, y, currentLayer.renderer);
 		background.drawables = grid.drawables();
-		drawing.draw(background);
+		background.draw();
 		gridShow.checked = true;
 	};
 	gridShow.onchange = (e) => {
@@ -791,10 +811,10 @@ async function init() {
 	};
 	gridX.onchange = renderGrid;
 	gridY.onchange = renderGrid;
-	document.addEventListener("canvas:resized", (e) => {
-		background.width = e.detail.w;
-		background.height = e.detail.h;
-		background.init();
+	Events.EVENT_CANVAS_RESIZED.listen(({ w, h }) => {
+		background.renderer.width = w;
+		background.renderer.height = h;
+		background.renderer.init();
 		if (gridShow.checked) {
 			renderGrid();
 		}
@@ -817,8 +837,8 @@ async function init() {
 		};
 
 		const updateLayerSelection = () => {
-			canvas = layers.getCurrent().renderer;
-			drawables = layers.getCurrent().drawables;
+			Events.EVENT_LAYER_SELECTED.dispatch(layers.getCurrent());
+			currentLayer = layers.getCurrent();
 
 			layerSelectionCtl.max = layers.stack.length - 1;
 			layerSelectionCtl.value = layers.current;
@@ -826,7 +846,7 @@ async function init() {
 			updateLayerTogglerState();
 		};
 		const updateLayerTogglerState = () => {
-			layerToggler.checked = canvas.el.style.display === "none";
+			layerToggler.checked = currentLayer.renderer.el.style.display === "none";
 			removeLayerCtl.disabled = layers.stack.length <= 2;
 		};
 
@@ -844,11 +864,11 @@ async function init() {
 		layerToggler.onchange = (e) => {
 			if (layerToggler.checked) {
 				// TODO: wat
-				canvas.el.style.display = "none";
-				canvas.buffer.style.display = "none";
+				currentLayer.renderer.el.style.display = "none";
+				currentLayer.renderer.buffer.style.display = "none";
 			} else {
-				canvas.el.style.display = "block";
-				canvas.buffer.style.display = "block";
+				currentLayer.renderer.el.style.display = "block";
+				currentLayer.renderer.buffer.style.display = "block";
 			}
 			updateLayerTogglerState();
 		};
