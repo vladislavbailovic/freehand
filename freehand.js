@@ -175,8 +175,7 @@ class SVGRenderer extends Renderer {
 
 	static cloneFrom(source) {
 		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-		const dims = source.getBoundingClientRect();
-		svg.setAttribute("viewBox", `0 0 ${dims.width} ${dims.height}`);
+		svg.setAttribute("viewBox", `0 0 ${source.width} ${source.height}`);
 		svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 
 		return new SVGRenderer(svg);
@@ -496,6 +495,8 @@ class LayerStack {
 		this.stack.push(new Layer(this.createCanvasRenderer())); // layer 1
 		this.reorderLayers();
 
+		this.getBackground().stroke = 1;
+
 		this.current = 1;
 	}
 
@@ -536,15 +537,7 @@ class LayerStack {
 	}
 
 	getCurrent() {
-		this.root.parentElement.querySelectorAll("canvas").forEach((el) => {
-			el.removeAttribute("current-layer");
-		});
-		const layer = this.stack[this.current];
-		// TODO: wat
-		layer.renderer.el.setAttribute("current-layer", this.current);
-		layer.renderer.buffer.setAttribute("current-layer", this.current);
-
-		return layer;
+		return this.stack[this.current];
 	}
 
 	removeCurrent() {
@@ -566,17 +559,21 @@ class LayerStack {
 class Layer {
 	passes = 5;
 	smoothing = 10;
-	stroke = 1;
+	stroke = 2;
 
 	constructor(renderer) {
 		this.renderer = renderer;
 		this.drawables = new Drawables();
 	}
 
+	async redraw() {
+		this.renderer.reset();
+		return this.draw();
+	}
+
 	async draw() {
 		const drawables = this.drawables;
 		const renderer = this.renderer;
-		renderer.reset();
 
 		let passes = this.passes;
 		if (passes < 1) passes = 1;
@@ -699,6 +696,10 @@ async function init() {
 			currentLine.add(new Point(e.offsetX, e.offsetY));
 		}
 	};
+	Events.EVENT_CANVAS_RESIZED.listen(({ w, h }) => {
+		layers.root.width = w;
+		layers.root.height = h;
+	});
 
 	let start;
 	const draw = (ts) => {
@@ -706,7 +707,7 @@ async function init() {
 		const deltaTime = ts - start;
 		window.requestAnimationFrame(draw);
 		if (deltaTime > 1000 / 25) {
-			currentLayer.draw();
+			currentLayer.redraw();
 			start = ts;
 		}
 	};
@@ -762,8 +763,16 @@ async function init() {
 		const resp = confirm(`Download ${fname}?`);
 		if (!resp) return false;
 
-		const svg = SVGRenderer.cloneFrom(pad);
-		await drawing.draw(drawables, svg);
+		const svg = SVGRenderer.cloneFrom(currentLayer.renderer);
+		for (let i = 0; i < layers.stack.length; i++) {
+			const layer = layers.stack[i];
+			const svgLayer = new Layer(svg);
+			svgLayer.drawables = layer.drawables;
+			svgLayer.smoothing = layer.smoothing;
+			svgLayer.passes = layer.passes;
+			svgLayer.stroke = layer.stroke;
+			await svgLayer.draw();
+		}
 
 		const dl = document.createElement("a");
 		dl.href = window.URL.createObjectURL(
@@ -776,18 +785,30 @@ async function init() {
 	};
 
 	document.getElementById("plus-left").onclick = (e) => {
-		currentLayer.drawables.shiftBy(canvas.width / 2, 0);
-		resizeDrawingArea(canvas.width + canvas.width / 2, canvas.height);
+		currentLayer.drawables.shiftBy(currentLayer.renderer.width / 2, 0);
+		resizeDrawingArea(
+			currentLayer.renderer.width + currentLayer.renderer.width / 2,
+			currentLayer.renderer.height,
+		);
 	};
 	document.getElementById("plus-right").onclick = (e) => {
-		resizeDrawingArea(canvas.width + canvas.width / 2, canvas.height);
+		resizeDrawingArea(
+			currentLayer.renderer.width + currentLayer.renderer.width / 2,
+			currentLayer.renderer.height,
+		);
 	};
 	document.getElementById("plus-top").onclick = (e) => {
-		currentLayer.drawables.shiftBy(0, canvas.height / 2);
-		resizeDrawingArea(canvas.width, canvas.height + canvas.height / 2);
+		currentLayer.drawables.shiftBy(0, currentLayer.renderer.height / 2);
+		resizeDrawingArea(
+			currentLayer.renderer.width,
+			currentLayer.renderer.height + currentLayer.renderer.height / 2,
+		);
 	};
 	document.getElementById("plus-bottom").onclick = (e) => {
-		resizeDrawingArea(canvas.width, canvas.height + canvas.height / 2);
+		resizeDrawingArea(
+			currentLayer.renderer.width,
+			currentLayer.renderer.height + currentLayer.renderer.height / 2,
+		);
 	};
 
 	const gridX = document.getElementById("grid-x");
@@ -798,7 +819,7 @@ async function init() {
 		const y = parseInt(gridY.value, 10);
 		const grid = new Grid(x, y, currentLayer.renderer);
 		background.drawables = grid.drawables();
-		background.draw();
+		background.redraw();
 		gridShow.checked = true;
 	};
 	gridShow.onchange = (e) => {
@@ -821,7 +842,7 @@ async function init() {
 	});
 
 	window.onresize = (e) => {
-		canvas.init();
+		currentLayer.renderer.init();
 	};
 
 	// Layers
